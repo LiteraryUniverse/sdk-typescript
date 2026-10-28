@@ -82,5 +82,8 @@
   "homepage": "https://github.com/LiteraryUniverse/sdk-typescript#readme",
   "bugs": {
     "url": "https://github.com/LiteraryUniverse/sdk-typescript/issues"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   }
 }
