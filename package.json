@@ -1,0 +1,87 @@
+{
+  "name": "@literary-universe/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Literary Universe authoring API client for Node and Bun",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./project": {
+      "import": {
+        "types": "./dist/esm/project.d.ts",
+        "default": "./dist/esm/project.js"
+      },
+      "require": {
+        "types": "./dist/cjs/project.d.ts",
+        "default": "./dist/cjs/project.js"
+      }
+    },
+    "./images": {
+      "import": {
+        "types": "./dist/esm/images.d.ts",
+        "default": "./dist/esm/images.js"
+      },
+      "require": {
+        "types": "./dist/cjs/images.d.ts",
+        "default": "./dist/cjs/images.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "schema.graphql",
+    "README.md",
+    "LICENSE",
+    "image-policy.json"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "check:generated": "node scripts/generate.mjs --check",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepack": "npm run check:generated && npm run build",
+    "prepare": "npm run check:generated && npm run build"
+  },
+  "devDependencies": {
+    "@graphql-codegen/typescript-operations": "6.1.10",
+    "graphql": "16.14.2",
+    "typescript": "5.9.3",
+    "@types/node": "24.13.6",
+    "sharp": "0.35.5"
+  },
+  "overrides": {
+    "@graphql-tools/utils": "12.1.0"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "sharp": "0.35.5"
+  },
+  "peerDependenciesMeta": {
+    "sharp": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LiteraryUniverse/sdk-typescript.git"
+  },
+  "homepage": "https://github.com/LiteraryUniverse/sdk-typescript#readme",
+  "bugs": {
+    "url": "https://github.com/LiteraryUniverse/sdk-typescript/issues"
+  }
+}

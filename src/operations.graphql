@@ -1,0 +1,70 @@
+query LuIdentity {
+  result: apiIdentity {
+    version kind userId organizationId credentialId scopes expiresAt
+    resourceRestrictions { universeIds storyIds }
+    deploymentUrl environment
+    limits { defaultPageSize maxPageSize maxRequestBytes maxDraftBytes maxResponseBytes }
+  }
+}
+query LuProfile { result: apiIdentity { userId username } }
+query LuStories($first: Int, $after: String) {
+  result: authorStories(first: $first, after: $after) {
+    nodes { id title slug language universeId organizationId createdAt updatedAt publishedAt privateAt state }
+    pageInfo { endCursor hasNextPage }
+  }
+}
+query LuStory($id: ID!) {
+  result: authorStory(id: $id) { id title slug language universeId organizationId createdAt updatedAt publishedAt privateAt state description authorsNotes }
+}
+query LuUniverses($first: Int, $after: String) {
+  result: authorUniverses(first: $first, after: $after) {
+    nodes { id title slug language organizationId createdAt updatedAt publishedAt privateAt state }
+    pageInfo { endCursor hasNextPage }
+  }
+}
+query LuUniverse($id: ID!) {
+  result: authorUniverse(id: $id) {
+    id title slug language organizationId createdAt updatedAt publishedAt privateAt state description
+    translations { language title description revision }
+  }
+}
+query LuChapters($storyId: ID!, $language: Locale, $first: Int, $after: String) {
+  result: authorChapters(storyId: $storyId, language: $language, first: $first, after: $after) {
+    nodes { id storyId sequence title language hasDraft updatedAt publishedAt }
+    pageInfo { endCursor hasNextPage }
+  }
+}
+query LuDraft($id: ID!, $language: Locale) {
+  result: authorChapterDraft(id: $id, language: $language) { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters }
+}
+mutation LuSaveDraft($input: AuthorDraftSaveInput!) {
+  result: authorSaveChapterDraft(input: $input) {
+    version recoveryId warnings { code path message }
+    draft { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters }
+  }
+}
+query LuValidateDraft($input: AuthorDraftSaveInput!) {
+  result: authorValidateChapterDraft(input: $input) { version warnings { code path message } }
+}
+query LuDraftRecovery($id: ID!, $recoveryId: ID!) {
+  result: authorChapterDraftRecovery(id: $id, recoveryId: $recoveryId) { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters }
+}
+mutation LuCreateChapter($input: AuthorChapterCreateInput!) {
+  result: authorCreateChapter(input: $input) { id storyId language sequence title version warnings { code path message } }
+}
+mutation LuPublishChapter($input: AuthorChapterPublishInput!) {
+  result: authorPublishChapter(input: $input) { id storyId language revisionId version audience publishedAt chapterPublishedAt warnings { code path message } }
+}
+mutation LuCreateUniverseTranslation($universeId: ID!, $language: Locale!, $input: AuthorUniverseTranslationInput) {
+  result: createAuthorUniverseTranslation(universeId: $universeId, language: $language, input: $input) {
+    created
+    translation { language title description revision }
+  }
+}
+mutation LuUpdateUniverseTranslation($universeId: ID!, $language: Locale!, $expectedRevision: Int!, $input: AuthorUniverseTranslationInput!) {
+  result: updateAuthorUniverseTranslation(universeId: $universeId, language: $language, expectedRevision: $expectedRevision, input: $input) {
+    language title description revision
+  }
+}
+
+query LuImagePolicy { result: authorImagePolicy }

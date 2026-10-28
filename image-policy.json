@@ -1,0 +1,72 @@
+{
+  "version": "1",
+  "maxSourceBytes": 52428800,
+  "maxDecodedPixels": 40000000,
+  "maxUploadPixels": 16000000,
+  "processingSeconds": 10,
+  "purposes": {
+    "story-cover": {
+      "maxBytes": 5242880,
+      "allowedTypes": ["image/jpeg", "image/png", "image/webp"],
+      "maxWidth": 4096,
+      "maxHeight": 6144,
+      "aspectRatio": 0.6666666666666666,
+      "recommendedWidth": 800,
+      "recommendedHeight": 1200
+    },
+    "universe-cover": {
+      "maxBytes": 5242880,
+      "allowedTypes": ["image/jpeg", "image/png", "image/webp"],
+      "maxWidth": 4096,
+      "maxHeight": 4096,
+      "aspectRatio": 1,
+      "recommendedWidth": 800,
+      "recommendedHeight": 800
+    },
+    "chapter-image": {
+      "maxBytes": 5242880,
+      "allowedTypes": ["image/jpeg", "image/png", "image/webp"],
+      "maxWidth": 8192,
+      "maxHeight": 8192,
+      "aspectRatio": null,
+      "recommendedWidth": null,
+      "recommendedHeight": null
+    },
+    "encyclopedia-image": {
+      "maxBytes": 5242880,
+      "allowedTypes": ["image/jpeg", "image/png", "image/webp"],
+      "maxWidth": 8192,
+      "maxHeight": 8192,
+      "aspectRatio": null,
+      "recommendedWidth": null,
+      "recommendedHeight": null
+    },
+    "blog-image": {
+      "maxBytes": 5242880,
+      "allowedTypes": ["image/jpeg", "image/png", "image/webp"],
+      "maxWidth": 4096,
+      "maxHeight": 2304,
+      "aspectRatio": 1.7777777777777777,
+      "recommendedWidth": 1200,
+      "recommendedHeight": 675
+    },
+    "blog-logo": {
+      "maxBytes": 2097152,
+      "allowedTypes": ["image/jpeg", "image/png", "image/webp"],
+      "maxWidth": 2048,
+      "maxHeight": 2048,
+      "aspectRatio": null,
+      "recommendedWidth": 512,
+      "recommendedHeight": 512
+    },
+    "blog-header": {
+      "maxBytes": 5242880,
+      "allowedTypes": ["image/jpeg", "image/png", "image/webp"],
+      "maxWidth": 6000,
+      "maxHeight": 2000,
+      "aspectRatio": 3,
+      "recommendedWidth": 1600,
+      "recommendedHeight": 534
+    }
+  }
+}

@@ -1,0 +1,331 @@
+"""
+Requires this scope for API keys. Existing guest/session resource checks still apply.
+organizationPublicRead permits organization keys only as guests on explicitly classified reads.
+"""
+directive @requiresScope(scope: String!, organizationPublicRead: Boolean = false) on FIELD_DEFINITION | OBJECT
+
+directive @authenticated on FIELD_DEFINITION | OBJECT
+
+"""
+Not available to API keys; existing browser and guest checks still apply.
+"""
+directive @sessionOnly on FIELD_DEFINITION | OBJECT
+
+"""Explicit public API query. The resolver must expose only public data."""
+directive @publicApi on FIELD_DEFINITION
+
+"""
+Query or mutation whose resolver enforces credential resource restrictions. Does not grant a scope or resource access.
+"""
+directive @resourceAware on FIELD_DEFINITION
+
+"""
+Authenticated identity/grant metadata for the caller's own credential. Does not grant profile or work access.
+"""
+directive @credentialInfo on FIELD_DEFINITION
+
+enum ApiCredentialKind {
+  PERSONAL_API_KEY
+  ORGANIZATION_API_KEY
+  SESSION
+}
+
+type ApiResourceRestrictions {
+  universeIds: [ID!]!
+  storyIds: [ID!]!
+}
+
+type ApiReadLimits {
+  defaultPageSize: Int!
+  maxPageSize: Int!
+  maxRequestBytes: Int!
+  maxDraftBytes: Int!
+  maxResponseBytes: Int!
+}
+
+type ApiIdentity {
+  version: String!
+  kind: ApiCredentialKind!
+  userId: ID
+  username: String
+  organizationId: ID
+  credentialId: ID
+  scopes: [String!]!
+  expiresAt: DateTime
+  resourceRestrictions: ApiResourceRestrictions
+  deploymentUrl: URL!
+  environment: String!
+  limits: ApiReadLimits!
+}
+
+type Query {
+  """
+  Deployment and this credential's grants. Does not enumerate other users or organizations.
+  """
+  apiIdentity: ApiIdentity!
+  authorStories(first: Int = 25, after: String): AuthorStoryConnection!
+  authorStory(id: ID!): AuthorStory
+  authorUniverses(first: Int = 25, after: String): AuthorUniverseConnection!
+  authorUniverse(id: ID!): AuthorUniverse
+  authorChapters(storyId: ID!, language: Locale, first: Int = 25, after: String): AuthorChapterConnection!
+  authorChapterDraft(id: ID!, language: Locale): AuthorChapterDraft
+  authorValidateChapterDraft(input: AuthorDraftSaveInput!): AuthorDraftValidation!
+  authorChapterDraftRecovery(id: ID!, recoveryId: ID!): AuthorChapterDraft
+  authorImagePolicy: JSON!
+}
+
+enum AuthorWorkState {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+}
+
+type AuthorPageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+}
+
+type AuthorStoryHeader {
+  id: ID!
+  title: String!
+  slug: String
+  language: Locale!
+  universeId: ID
+  organizationId: ID
+  createdAt: DateTime
+  updatedAt: DateTime
+  publishedAt: DateTime
+  privateAt: DateTime
+  state: AuthorWorkState!
+}
+
+type AuthorStoryConnection {
+  nodes: [AuthorStoryHeader!]!
+  pageInfo: AuthorPageInfo!
+}
+
+type AuthorStory {
+  id: ID!
+  title: String!
+  slug: String
+  language: Locale!
+  universeId: ID
+  organizationId: ID
+  createdAt: DateTime
+  updatedAt: DateTime
+  publishedAt: DateTime
+  privateAt: DateTime
+  state: AuthorWorkState!
+  description: String
+  authorsNotes: JSON
+}
+
+type AuthorUniverseHeader {
+  id: ID!
+  title: String!
+  slug: String
+  language: Locale!
+  organizationId: ID
+  createdAt: DateTime
+  updatedAt: DateTime
+  publishedAt: DateTime
+  privateAt: DateTime
+  state: AuthorWorkState!
+}
+
+type AuthorUniverseConnection {
+  nodes: [AuthorUniverseHeader!]!
+  pageInfo: AuthorPageInfo!
+}
+
+type AuthorUniverse {
+  id: ID!
+  title: String!
+  slug: String
+  language: Locale!
+  organizationId: ID
+  createdAt: DateTime
+  updatedAt: DateTime
+  publishedAt: DateTime
+  privateAt: DateTime
+  state: AuthorWorkState!
+  description: String
+
+  """
+  Translations of the title and description, each with the revision a change must name.
+  """
+  translations: [AuthorUniverseTranslation!]!
+}
+
+type AuthorUniverseTranslation {
+  language: Locale!
+  title: String!
+  description: String
+
+  """Advances with every change; pass it as expectedRevision to update."""
+  revision: Int!
+}
+
+input AuthorUniverseTranslationInput {
+  title: String
+  description: String
+}
+
+type AuthorUniverseTranslationCreation {
+  """
+  False when the language already had a translation; it is returned unchanged.
+  """
+  created: Boolean!
+  translation: AuthorUniverseTranslation!
+}
+
+type Mutation {
+  """
+  Open a language for a universe. Title and description start as copies of the
+  original unless given. Also opens the language for the universe's
+  encyclopedia and universe blog.
+  """
+  createAuthorUniverseTranslation(universeId: ID!, language: Locale!, input: AuthorUniverseTranslationInput): AuthorUniverseTranslationCreation!
+
+  """
+  Change fields of a translation. Fails with VERSION_CONFLICT, and changes
+  nothing, when the translation is no longer at expectedRevision.
+  """
+  updateAuthorUniverseTranslation(universeId: ID!, language: Locale!, expectedRevision: Int!, input: AuthorUniverseTranslationInput!): AuthorUniverseTranslation!
+  authorPublishChapter(input: AuthorChapterPublishInput!): AuthorChapterPublishResult!
+  authorCreateChapter(input: AuthorChapterCreateInput!): AuthorChapterCreateResult!
+  authorSaveChapterDraft(input: AuthorDraftSaveInput!): AuthorDraftSaveResult!
+}
+
+type AuthorChapterHeader {
+  id: ID!
+  storyId: ID!
+  sequence: Int!
+  title: String!
+  language: Locale!
+  hasDraft: Boolean!
+  updatedAt: DateTime
+  publishedAt: DateTime
+}
+
+type AuthorChapterConnection {
+  nodes: [AuthorChapterHeader!]!
+  pageInfo: AuthorPageInfo!
+}
+
+type AuthorChapterDraft {
+  version: String!
+  id: ID!
+  storyId: ID!
+  sequence: Int!
+  title: String!
+  language: Locale!
+  updatedAt: DateTime
+  publishedAt: DateTime
+  content: JSON
+  html: String
+  text: String
+  oldHtml: String
+  markdown: String
+  authorsNotes: JSON
+  translatorsNotes: JSON
+  counters: JSON
+}
+
+input AuthorDraftSaveInput {
+  id: ID!
+  language: Locale
+  expectedVersion: String!
+  operationId: ID!
+  content: JSON!
+}
+
+type AuthorContentWarning {
+  code: String!
+  path: String!
+  message: String!
+}
+
+type AuthorDraftSaveResult {
+  version: String!
+  recoveryId: ID!
+  warnings: [AuthorContentWarning!]!
+  draft: AuthorChapterDraft!
+}
+
+type AuthorDraftValidation {
+  version: String!
+  warnings: [AuthorContentWarning!]!
+}
+
+input AuthorChapterCreateInput {
+  storyId: ID!
+  operationId: ID!
+  title: String
+  content: JSON
+  isAIGenerated: Boolean
+}
+
+type AuthorChapterCreateResult {
+  id: ID!
+  storyId: ID!
+  language: Locale!
+  sequence: Int!
+  title: String!
+  version: String!
+  warnings: [AuthorContentWarning!]!
+}
+
+enum AuthorPublicationAudience {
+  BETA
+  READERS
+}
+
+input AuthorChapterPublishInput {
+  id: ID!
+  language: Locale
+  expectedVersion: String!
+  operationId: ID!
+  publishAt: DateTime
+  audience: AuthorPublicationAudience = READERS
+}
+
+type AuthorChapterPublishResult {
+  id: ID!
+  storyId: ID!
+  language: Locale!
+  revisionId: ID!
+  version: String!
+  audience: AuthorPublicationAudience!
+  publishedAt: DateTime!
+  chapterPublishedAt: DateTime
+  warnings: [AuthorContentWarning!]!
+}
+
+scalar Date
+
+scalar DateTime
+
+scalar Duration
+
+scalar EmailAddress
+
+scalar NonNegativeInt
+
+scalar URL
+
+scalar HexColorCode
+
+scalar ISBN
+
+scalar Currency
+
+scalar JSON
+
+scalar JSONObject
+
+scalar CountryCode
+
+scalar Locale
+
+scalar GeoJSON
