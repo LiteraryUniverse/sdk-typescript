@@ -83,10 +83,13 @@ try {
 | `story({id})` | `story:read` | Story metadata and author notes |
 | `chapters({storyId, language, first, after})` | `story:read` | Chapter headers without bodies |
 | `draft({id, language})` | `story:read` | Stored working draft, including JSON, HTML/text/legacy representations and notes/counters |
+| `encyclopediaEntries({universeId, first, after})` | `universe:read` | Paginated entry headers of a universe, drafts included |
+| `encyclopediaEntry({id, language})` | `universe:read` | An entry with its summary, links and fields as plain text, in the original or a translated edition |
+| `series({universeId})` | `universe:read` | The universe's saved series, each with its `version` and its stories in reading order |
 
-Read access requires the person's current `draft.read` capability on the work or inherited universe. Personal credentials use current organization roles, including read-only view-all; removing a role affects subsequent requests. Organization-owned catalog credentials remain guests and cannot use author reads. Fan fiction is readable by its author and that story's own team; the team of the universe it is set in does not inherit it.
+Read access requires the person's current `draft.read` capability on the work or inherited universe. Personal credentials use current organization roles, including read-only view-all; removing a role affects subsequent requests. Organization keys are described under [Organization keys](#organization-keys). Fan fiction is readable by its author and that story's own team; the team of the universe it is set in does not inherit it.
 
-Draft language defaults to the chapter's original language. An explicit translation returns that stored edition; a missing edition or unavailable permission returns `NOT_FOUND`. Draft JSON preserves editor nodes and marks without conversion. Titles, descriptions and `html` are returned as the app displays them, with the stored entity encoding removed. `text` and `markdown` are returned as stored, where a literal `<` or `>` is `&lt;` or `&gt;`. `updatedAt` is existing metadata, not an atomic write-precondition version. Draft reads return a server version. Versioned content saves, validation, recovery, chapter creation, publication, and universe translations are available. Encyclopedia editing is later work.
+Draft language defaults to the chapter's original language. An explicit translation returns that stored edition; a missing edition or unavailable permission returns `NOT_FOUND`. Draft JSON preserves editor nodes and marks without conversion. Titles, descriptions and `html` are returned as the app displays them, with the stored entity encoding removed. `text` and `markdown` are returned as stored, where a literal `<` or `>` is `&lt;` or `&gt;`. `updatedAt` is existing metadata, not an atomic write-precondition version. Draft reads return a server version. Versioned content saves, validation, recovery, chapter creation, publication, universe translations, story and universe details, chapter structure, encyclopedia entries and series are available.
 
 Chapter headers include `hasDraft` for the requested edition. When a translation has not been created, its header retains the source title as a label, has `hasDraft: false`, and does not inherit the original's publication timestamp.
 
@@ -104,6 +107,65 @@ A translation is the universe's title and description in another language. Who m
 `expectedRevision` is the `revision` you read from `universe({id})`. Every change advances it, including saves in the browser workshop, which overwrite without a revision. When the translation is no longer at `expectedRevision` the update changes nothing and fails with `VERSION_CONFLICT`; the error's `currentRevision` says where it is now, so read it again and decide what to write. Translations saved before revisions existed are at revision 0.
 
 Writes are never retried, whatever `maxRetries` says: a lost response to an applied update would come back from a retry as a conflict. A resource-restricted credential can write to the universes it selects.
+
+## Organization keys
+
+An organization admin creates organization keys in the organization's settings, on the API keys tab, which the organization's `api` add-on opens. With `organization:read` alone a key reads the organization's public catalogue as a guest, for display on another site. With work scopes (`story:read`, `story:write`, `story:publish`, `universe:read`, `universe:write`, `universe:translate`) it acts as the organization itself: it has an organization admin's rights over the stories and universes the organization owns, and over the stories set in those universes, and over nothing else. It keeps working when the admin who created it leaves; revoke it to stop it. `identity()` reports it as `ORGANIZATION_API_KEY` with its `organizationId` and no `userId`. What it creates is recorded under the owner of the work it writes into, and the audit log names the key.
+
+Organization keys cannot upload covers or chapter images yet; use a personal key for those.
+
+## Story details and visibility
+
+| Method | Scope | Result |
+| --- | --- | --- |
+| `updateStory({storyId, input})` | `story:write` | The story header after the change |
+| `setStoryVisibility({storyId, visibility})` | `story:write` | The story header; `privateAt` is set while it is hidden |
+
+`input` takes `title`, `description`, `genres`, `tags`, `rating`, `license`, `language` and `universeId`; only the fields you give change. Moving a story to another universe takes the story owner's rights (the owner or an admin of the owning organization) and edit rights on the target universe, as the workshop does; `universeId: null` makes it standalone. A rating under staff review stays as it is (`FAILED_PRECONDITION`).
+
+`PRIVATE` hides a published story from readers and its universe's story count; `PUBLIC` shows it again. A story that was never published fails with `BAD_USER_INPUT`.
+
+## Chapter structure
+
+| Method | Scope | Result |
+| --- | --- | --- |
+| `renameChapter({id, language?, title})` | `story:write` | The chapter header with its new title |
+| `reorderChapters({storyId, chapterIds})` | `story:write` | `{storyId, chapterIds}` in the new order |
+| `removeChapter({id})` | `story:write` | `{id, storyId}` of the removed unpublished chapter |
+
+Renaming and reordering apply to published chapters too, and readers see the change at once. A `language` renames that translation's title; without it the original is renamed, together with the story's list of chapters. `chapterIds` names every chapter of the story exactly once. Only a chapter never published, in any language or to beta readers, can be removed (`FAILED_PRECONDITION` otherwise); the chapters after it are renumbered. The only chapter of a story cannot be removed. A story whose arcs or free preview chapters count chapters keeps its structure: removal and reordering fail with `FAILED_PRECONDITION`. `removeChapter` is never retried.
+
+## Universe details
+
+| Method | Scope | Result |
+| --- | --- | --- |
+| `updateUniverse({universeId, input})` | `universe:write` | The universe header after the change |
+
+`input` takes `title`, `slug`, `description`, `genre`, `rating`, `license` and `language`. A `slug` is lowercase letters, digits and single hyphens; one in use by another universe fails with `CONFLICT`. `genre` is a genre value such as `fantasy`. A rating under staff review does not change (`FAILED_PRECONDITION`). Translations of the title and description go through `updateUniverseTranslation`.
+
+## Encyclopedia
+
+| Method | Scope | Result |
+| --- | --- | --- |
+| `createEncyclopediaEntry({universeId, name, categoryTitle, ...})` | `universe:write` | The new draft entry |
+| `updateEncyclopediaEntry({id, changes})` | `universe:write` | The entry after the change |
+| `translateEncyclopediaEntry({id, language, ...})` | `universe:translate` or `universe:write` | The entry's edition in that language |
+| `setEncyclopediaEntryPublication({id, published})` | `universe:write` | The entry, published or back to draft |
+| `deleteEncyclopediaEntry({id})` | `universe:write` | `{id, universeId}` of the deleted entry |
+
+A new entry is a draft in a category the universe offers, named by its title, and starts with the category's template fields. It can carry its first text right away: `pronunciation`, `tags`, `summary`, `parentName`, `relatedAdd`, and `fields` and `timeFields` by title. Other entries are named by their names. A name the universe already has fails with `CONFLICT`, and the error's `resourceId` is the existing entry. The plan of the universe's owner caps the number of entries (`FAILED_PRECONDITION`). Creation and deletion are never retried.
+
+`changes` sets the same values in the original language and may also change `name` and `categoryTitle`, remove links with `relatedRemove`, and clear the parent with `parentName: null`. Text is plain; the server turns it into the editor's format. A text field of a new title is added; a field that holds something other than text is refused. `translateEncyclopediaEntry` writes an edition in a language the universe is translated into (`FAILED_PRECONDITION` otherwise): `name`, `pronunciation`, `summary` and `fields`, each named by its original title with an optional `translatedTitle`. A new edition starts as a copy of the original.
+
+Publishing shows the entry to readers; unpublishing returns it to a draft. Deletion can be undone by staff and removes the entry from the parent and related links of the universe's other entries.
+
+## Series
+
+| Method | Scope | Result |
+| --- | --- | --- |
+| `saveSeries({universeId, seriesId?, expectedVersion, title, storyIds})` | `universe:write` | The saved series with its new `version` |
+
+A series is the reading order of stories in a universe. `storyIds` lists stories of the universe, not fan fiction, in order; the series workshop shows them in a row. Leave out `seriesId` and pass `expectedVersion: 0` to create one; to replace one, pass the `version` read from `series({universeId})`. A series changed since then fails with `VERSION_CONFLICT` and changes nothing. Saves are never retried. A universe holds up to 50 series.
 
 ## Resource restrictions
 
@@ -125,7 +187,7 @@ Restricted credentials are denied on legacy GraphQL operations and HTTP text exp
 
 ## Errors and limits
 
-`LiteraryUniverseApiError` provides `code`, a safe message, optional `requestId`, HTTP `status`, `retryAfterSeconds`, and `currentRevision` with `VERSION_CONFLICT`. Partial GraphQL data is rejected whenever the response contains errors. Missing and inaccessible resources both return `NOT_FOUND`. Common server codes include `UNAUTHENTICATED`, `FORBIDDEN`, `BAD_USER_INPUT`, `GRAPHQL_VALIDATION_FAILED`, `NOT_FOUND`, `VERSION_CONFLICT`, `PAYLOAD_TOO_LARGE`, and `INTERNAL_SERVER_ERROR`. Client/transport codes include `INVALID_CONFIGURATION`, `INVALID_RESPONSE`, `REDIRECTED`, `NETWORK_ERROR`, `RATE_LIMITED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` and `CANCELLED`. An HTTP failure without a GraphQL error, such as a 404 from a wrong mount prefix, is `INVALID_RESPONSE`.
+`LiteraryUniverseApiError` provides `code`, a safe message, optional `requestId`, HTTP `status`, `retryAfterSeconds`, `currentRevision` with `VERSION_CONFLICT`, and `resourceId` with `CONFLICT`. Partial GraphQL data is rejected whenever the response contains errors. Missing and inaccessible resources both return `NOT_FOUND`. Common server codes include `UNAUTHENTICATED`, `FORBIDDEN`, `BAD_USER_INPUT`, `GRAPHQL_VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT`, `FAILED_PRECONDITION`, `VERSION_CONFLICT`, `PAYLOAD_TOO_LARGE`, and `INTERNAL_SERVER_ERROR`. Client/transport codes include `INVALID_CONFIGURATION`, `INVALID_RESPONSE`, `REDIRECTED`, `NETWORK_ERROR`, `RATE_LIMITED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` and `CANCELLED`. An HTTP failure without a GraphQL error, such as a 404 from a wrong mount prefix, is `INVALID_RESPONSE`.
 
 Requests retain the 1 MiB JSON ceiling. A draft pull is limited to 8 MiB; requests containing author operations have a 16 MiB response ceiling. The SDK also stops reading at 16 MiB. IP/batch protection remains. Deployed API-key traffic also consumes atomic per-key and owner budgets shared across instances. GraphQL development skips limits except in E2E mode; image transfers always consume shared credential quotas. Top-level aliases are charged as operations; a single query is limited to 20 roots.
 

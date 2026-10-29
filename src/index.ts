@@ -1,21 +1,38 @@
 import {
 	type AuthorChapterCreateInput,
 	type AuthorChapterPublishInput,
+	type AuthorChapterRemoveInput,
+	type AuthorChapterRenameInput,
+	type AuthorChapterReorderInput,
 	type AuthorDraftSaveInput,
+	type AuthorEncyclopediaEntryCreateInput,
+	type AuthorEncyclopediaEntryTranslationInput,
+	type AuthorSeriesSaveInput,
 	LuChaptersDocument,
 	type LuChaptersQuery,
 	type LuChaptersQueryVariables,
 	LuCreateChapterDocument,
 	type LuCreateChapterMutation,
+	LuCreateEncyclopediaEntryDocument,
+	type LuCreateEncyclopediaEntryMutation,
 	LuCreateUniverseTranslationDocument,
 	type LuCreateUniverseTranslationMutation,
 	type LuCreateUniverseTranslationMutationVariables,
+	LuDeleteEncyclopediaEntryDocument,
+	type LuDeleteEncyclopediaEntryMutation,
+	type LuDeleteEncyclopediaEntryMutationVariables,
 	LuDraftDocument,
 	type LuDraftQuery,
 	type LuDraftQueryVariables,
 	LuDraftRecoveryDocument,
 	type LuDraftRecoveryQuery,
 	type LuDraftRecoveryQueryVariables,
+	LuEncyclopediaEntriesDocument,
+	type LuEncyclopediaEntriesQuery,
+	type LuEncyclopediaEntriesQueryVariables,
+	LuEncyclopediaEntryDocument,
+	type LuEncyclopediaEntryQuery,
+	type LuEncyclopediaEntryQueryVariables,
 	LuIdentityDocument,
 	type LuIdentityQuery,
 	LuImagePolicyDocument,
@@ -24,20 +41,48 @@ import {
 	type LuProfileQuery,
 	LuPublishChapterDocument,
 	type LuPublishChapterMutation,
+	LuRemoveChapterDocument,
+	type LuRemoveChapterMutation,
+	LuRenameChapterDocument,
+	type LuRenameChapterMutation,
+	LuReorderChaptersDocument,
+	type LuReorderChaptersMutation,
 	LuSaveDraftDocument,
 	type LuSaveDraftMutation,
+	LuSaveSeriesDocument,
+	type LuSaveSeriesMutation,
+	LuSeriesDocument,
+	type LuSeriesQuery,
+	type LuSeriesQueryVariables,
+	LuSetEncyclopediaEntryPublicationDocument,
+	type LuSetEncyclopediaEntryPublicationMutation,
+	type LuSetEncyclopediaEntryPublicationMutationVariables,
+	LuSetStoryVisibilityDocument,
+	type LuSetStoryVisibilityMutation,
+	type LuSetStoryVisibilityMutationVariables,
 	LuStoriesDocument,
 	type LuStoriesQuery,
 	type LuStoriesQueryVariables,
 	LuStoryDocument,
 	type LuStoryQuery,
 	type LuStoryQueryVariables,
+	LuTranslateEncyclopediaEntryDocument,
+	type LuTranslateEncyclopediaEntryMutation,
 	LuUniverseDocument,
 	type LuUniverseQuery,
 	type LuUniverseQueryVariables,
 	LuUniversesDocument,
 	type LuUniversesQuery,
 	type LuUniversesQueryVariables,
+	LuUpdateEncyclopediaEntryDocument,
+	type LuUpdateEncyclopediaEntryMutation,
+	type LuUpdateEncyclopediaEntryMutationVariables,
+	LuUpdateStoryDocument,
+	type LuUpdateStoryMutation,
+	type LuUpdateStoryMutationVariables,
+	LuUpdateUniverseDocument,
+	type LuUpdateUniverseMutation,
+	type LuUpdateUniverseMutationVariables,
 	LuUpdateUniverseTranslationDocument,
 	type LuUpdateUniverseTranslationMutation,
 	type LuUpdateUniverseTranslationMutationVariables,
@@ -92,6 +137,8 @@ export class LiteraryUniverseApiError extends Error {
 		public readonly retryAfterSeconds?: number,
 		/** With VERSION_CONFLICT: the revision the resource is at now. */
 		public readonly currentRevision?: number,
+		/** With CONFLICT: the resource already holding the name. */
+		public readonly resourceId?: string,
 	) {
 		super(message)
 		this.name = 'LiteraryUniverseApiError'
@@ -122,6 +169,7 @@ type Envelope = {
 			code?: string
 			requestId?: string
 			currentRevision?: number
+			entryId?: string
 		}
 	}[]
 	extensions?: { requestId?: string }
@@ -280,6 +328,169 @@ export class LiteraryUniverseClient {
 			LuUpdateUniverseTranslationDocument,
 			'LuUpdateUniverseTranslation',
 			input,
+			options,
+			undefined,
+			0,
+		)
+	}
+
+	/** Changes a story's details; only the given fields change. */
+	updateStory(input: LuUpdateStoryMutationVariables, options?: RequestOptions) {
+		return this.read<LuUpdateStoryMutation>(
+			LuUpdateStoryDocument,
+			'LuUpdateStory',
+			input,
+			options,
+		)
+	}
+	/** Hides a published story from readers (`PRIVATE`) or shows it again (`PUBLIC`). */
+	setStoryVisibility(
+		input: LuSetStoryVisibilityMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuSetStoryVisibilityMutation>(
+			LuSetStoryVisibilityDocument,
+			'LuSetStoryVisibility',
+			input,
+			options,
+		)
+	}
+	renameChapter(input: AuthorChapterRenameInput, options?: RequestOptions) {
+		return this.read<LuRenameChapterMutation>(
+			LuRenameChapterDocument,
+			'LuRenameChapter',
+			{ input },
+			options,
+		)
+	}
+	/** Removes a chapter never published and renumbers the rest. Not retried: a repeat finds nothing to remove. */
+	removeChapter(input: AuthorChapterRemoveInput, options?: RequestOptions) {
+		return this.read<LuRemoveChapterMutation>(
+			LuRemoveChapterDocument,
+			'LuRemoveChapter',
+			{ input },
+			options,
+			undefined,
+			0,
+		)
+	}
+	/** Puts every chapter of a story in the given order. */
+	reorderChapters(input: AuthorChapterReorderInput, options?: RequestOptions) {
+		return this.read<LuReorderChaptersMutation>(
+			LuReorderChaptersDocument,
+			'LuReorderChapters',
+			{ input },
+			options,
+		)
+	}
+	updateUniverse(
+		input: LuUpdateUniverseMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuUpdateUniverseMutation>(
+			LuUpdateUniverseDocument,
+			'LuUpdateUniverse',
+			input,
+			options,
+		)
+	}
+	encyclopediaEntries(
+		input: LuEncyclopediaEntriesQueryVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuEncyclopediaEntriesQuery>(
+			LuEncyclopediaEntriesDocument,
+			'LuEncyclopediaEntries',
+			input,
+			options,
+		)
+	}
+	encyclopediaEntry(
+		input: LuEncyclopediaEntryQueryVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuEncyclopediaEntryQuery>(
+			LuEncyclopediaEntryDocument,
+			'LuEncyclopediaEntry',
+			input,
+			options,
+		)
+	}
+	/** Adds a draft entry. Fails with CONFLICT and `resourceId` when the name is taken; not retried. */
+	createEncyclopediaEntry(
+		input: AuthorEncyclopediaEntryCreateInput,
+		options?: RequestOptions,
+	) {
+		return this.read<LuCreateEncyclopediaEntryMutation>(
+			LuCreateEncyclopediaEntryDocument,
+			'LuCreateEncyclopediaEntry',
+			{ input },
+			options,
+			undefined,
+			0,
+		)
+	}
+	updateEncyclopediaEntry(
+		input: LuUpdateEncyclopediaEntryMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuUpdateEncyclopediaEntryMutation>(
+			LuUpdateEncyclopediaEntryDocument,
+			'LuUpdateEncyclopediaEntry',
+			input,
+			options,
+		)
+	}
+	translateEncyclopediaEntry(
+		input: AuthorEncyclopediaEntryTranslationInput,
+		options?: RequestOptions,
+	) {
+		return this.read<LuTranslateEncyclopediaEntryMutation>(
+			LuTranslateEncyclopediaEntryDocument,
+			'LuTranslateEncyclopediaEntry',
+			{ input },
+			options,
+		)
+	}
+	setEncyclopediaEntryPublication(
+		input: LuSetEncyclopediaEntryPublicationMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuSetEncyclopediaEntryPublicationMutation>(
+			LuSetEncyclopediaEntryPublicationDocument,
+			'LuSetEncyclopediaEntryPublication',
+			input,
+			options,
+		)
+	}
+	/** Not retried: a repeat finds nothing to delete. */
+	deleteEncyclopediaEntry(
+		input: LuDeleteEncyclopediaEntryMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuDeleteEncyclopediaEntryMutation>(
+			LuDeleteEncyclopediaEntryDocument,
+			'LuDeleteEncyclopediaEntry',
+			input,
+			options,
+			undefined,
+			0,
+		)
+	}
+	series(input: LuSeriesQueryVariables, options?: RequestOptions) {
+		return this.read<LuSeriesQuery>(
+			LuSeriesDocument,
+			'LuSeries',
+			input,
+			options,
+		)
+	}
+	/** Fails with VERSION_CONFLICT when the series changed since `expectedVersion`. */
+	saveSeries(input: AuthorSeriesSaveInput, options?: RequestOptions) {
+		return this.read<LuSaveSeriesMutation>(
+			LuSaveSeriesDocument,
+			'LuSaveSeries',
+			{ input },
 			options,
 			undefined,
 			0,
@@ -615,6 +826,9 @@ export class LiteraryUniverseClient {
 				response.status,
 				Number.isFinite(retryAfter) ? retryAfter : undefined,
 				Number.isInteger(currentRevision) ? currentRevision : undefined,
+				typeof firstError?.extensions?.entryId === 'string'
+					? firstError.extensions.entryId
+					: undefined,
 			)
 		}
 		const result = envelope?.data?.result

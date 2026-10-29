@@ -562,57 +562,60 @@ test('redacts API-key-shaped client labels before requests and serialization', a
 })
 
 test('updates a universe translation once, without retrying, and reports the current revision on a conflict', async () => {
-  const bodies = []
-  const client = new LiteraryUniverseClient({
-    baseUrl: 'https://example.test',
-    token: 'lu_test_fixture',
-    maxRetries: 2,
-    fetch: async (_url, init) => {
-      bodies.push(JSON.parse(init.body))
-      return new Response(
-        JSON.stringify({
-          errors: [
-            {
-              message: 'The translation changed meanwhile',
-              extensions: { code: 'VERSION_CONFLICT', currentRevision: 7 },
-            },
-          ],
-        }),
-      )
-    },
-  })
-  const input = {
-    universeId: 'universe',
-    language: 'en',
-    expectedRevision: 4,
-    input: { title: 'The Tale of Genji' },
-  }
-  await assert.rejects(
-    client.updateUniverseTranslation(input),
-    (error) =>
-      error instanceof LiteraryUniverseApiError &&
-      error.code === 'VERSION_CONFLICT' &&
-      error.currentRevision === 7,
-  )
-  assert.equal(bodies.length, 1)
-  assert.equal(bodies[0].operationName, 'LuUpdateUniverseTranslation')
-  assert.deepEqual(bodies[0].variables, input)
+	const bodies = []
+	const client = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		maxRetries: 2,
+		fetch: async (_url, init) => {
+			bodies.push(JSON.parse(init.body))
+			return new Response(
+				JSON.stringify({
+					errors: [
+						{
+							message: 'The translation changed meanwhile',
+							extensions: { code: 'VERSION_CONFLICT', currentRevision: 7 },
+						},
+					],
+				}),
+			)
+		},
+	})
+	const input = {
+		universeId: 'universe',
+		language: 'en',
+		expectedRevision: 4,
+		input: { title: 'The Tale of Genji' },
+	}
+	await assert.rejects(
+		client.updateUniverseTranslation(input),
+		(error) =>
+			error instanceof LiteraryUniverseApiError &&
+			error.code === 'VERSION_CONFLICT' &&
+			error.currentRevision === 7,
+	)
+	assert.equal(bodies.length, 1)
+	assert.equal(bodies[0].operationName, 'LuUpdateUniverseTranslation')
+	assert.deepEqual(bodies[0].variables, input)
 
-  const offline = new LiteraryUniverseClient({
-    baseUrl: 'https://example.test',
-    token: 'lu_test_fixture',
-    maxRetries: 2,
-    fetch: async () => {
-      bodies.push('attempt')
-      throw new TypeError('network down')
-    },
-  })
-  bodies.length = 0
-  await assert.rejects(
-    offline.createUniverseTranslation({ universeId: 'universe', language: 'en' }),
-    (error) => error.code === 'NETWORK_ERROR',
-  )
-  assert.equal(bodies.length, 1)
+	const offline = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		maxRetries: 2,
+		fetch: async () => {
+			bodies.push('attempt')
+			throw new TypeError('network down')
+		},
+	})
+	bodies.length = 0
+	await assert.rejects(
+		offline.createUniverseTranslation({
+			universeId: 'universe',
+			language: 'en',
+		}),
+		(error) => error.code === 'NETWORK_ERROR',
+	)
+	assert.equal(bodies.length, 1)
 })
 
 test('sets a cover with PUT on the cover route and keeps cover purposes off the asset upload', async () => {
@@ -624,18 +627,30 @@ test('sets a cover with PUT on the cover route and keeps cover purposes off the 
 			calls.push({ url: String(url), method: options.method })
 			return String(url).includes('missing')
 				? Response.json({ error: 'No story with this ID' }, { status: 404 })
-				: Response.json({ cover: { url: 'https://cdn.test/c.webp', handle: 'h', size: 3 } })
+				: Response.json({
+						cover: { url: 'https://cdn.test/c.webp', handle: 'h', size: 3 },
+					})
 		},
 	})
 	const bytes = new Uint8Array([1, 2, 3])
-	const cover = await client.setCover({ kind: 'story', id: 'story', bytes, type: 'image/png' })
+	const cover = await client.setCover({
+		kind: 'story',
+		id: 'story',
+		bytes,
+		type: 'image/png',
+	})
 	assert.equal(cover.handle, 'h')
 	assert.deepEqual(calls[0], {
 		url: 'https://example.test/prefix/api/stories/story/cover',
 		method: 'PUT',
 	})
 	await assert.rejects(
-		client.setCover({ kind: 'universe', id: 'missing', bytes, type: 'image/png' }),
+		client.setCover({
+			kind: 'universe',
+			id: 'missing',
+			bytes,
+			type: 'image/png',
+		}),
 		{ code: 'NOT_FOUND' },
 	)
 	assert.throws(
@@ -651,4 +666,116 @@ test('sets a cover with PUT on the cover route and keeps cover purposes off the 
 		{ code: 'BAD_USER_INPUT' },
 	)
 	assert.equal(calls.length, 2)
+})
+
+test('sends each curation write as its named operation with the caller input', async () => {
+	const sent = []
+	const results = {
+		LuUpdateStory: { id: 'story', license: 'cc-by-sa' },
+		LuSetStoryVisibility: { id: 'story', privateAt: '2026-10-29T00:00:00Z' },
+		LuRenameChapter: { id: 'chapter', title: 'Two' },
+		LuReorderChapters: { storyId: 'story', chapterIds: ['b', 'a'] },
+		LuUpdateUniverse: { id: 'universe', title: 'Myths' },
+		LuUpdateEncyclopediaEntry: { id: 'entry', summary: 'A captain.' },
+		LuTranslateEncyclopediaEntry: { id: 'entry', language: 'en' },
+		LuSetEncyclopediaEntryPublication: { id: 'entry', wip: false },
+		LuEncyclopediaEntries: { nodes: [], pageInfo: { hasNextPage: false } },
+		LuSeries: [{ id: 'series', storyIds: ['a', 'b'] }],
+	}
+	const client = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		fetch: async (_url, init) => {
+			const request = JSON.parse(init.body)
+			sent.push(request)
+			return Response.json({ data: { result: results[request.operationName] } })
+		},
+	})
+	await client.updateStory({ storyId: 'story', input: { license: 'cc-by-sa' } })
+	await client.setStoryVisibility({ storyId: 'story', visibility: 'PRIVATE' })
+	await client.renameChapter({ id: 'chapter', title: 'Two' })
+	await client.reorderChapters({ storyId: 'story', chapterIds: ['b', 'a'] })
+	await client.updateUniverse({
+		universeId: 'universe',
+		input: { title: 'Myths' },
+	})
+	await client.updateEncyclopediaEntry({
+		id: 'entry',
+		changes: { summary: 'A captain.' },
+	})
+	await client.translateEncyclopediaEntry({ id: 'entry', language: 'en' })
+	await client.setEncyclopediaEntryPublication({ id: 'entry', published: true })
+	await client.encyclopediaEntries({ universeId: 'universe' })
+	const series = await client.series({ universeId: 'universe' })
+	assert.deepEqual(series, results.LuSeries)
+	assert.deepEqual(
+		sent.map((request) => request.operationName),
+		Object.keys(results),
+	)
+	assert.deepEqual(sent[0].variables, {
+		storyId: 'story',
+		input: { license: 'cc-by-sa' },
+	})
+	assert.deepEqual(sent[2].variables, {
+		input: { id: 'chapter', title: 'Two' },
+	})
+})
+
+test('does not repeat removals, creations or series saves, and names the entry holding a taken name', async () => {
+	let calls = 0
+	const client = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		maxRetries: 2,
+		fetch: async () => {
+			calls++
+			throw new TypeError('network down')
+		},
+	})
+	for (const write of [
+		() => client.removeChapter({ id: 'chapter' }),
+		() => client.deleteEncyclopediaEntry({ id: 'entry' }),
+		() =>
+			client.createEncyclopediaEntry({
+				universeId: 'universe',
+				name: 'Nemo',
+				categoryTitle: 'Characters',
+			}),
+		() =>
+			client.saveSeries({
+				universeId: 'universe',
+				expectedVersion: 0,
+				title: 'Voyages',
+				storyIds: ['a'],
+			}),
+	]) {
+		calls = 0
+		await assert.rejects(write(), (error) => error.code === 'NETWORK_ERROR')
+		assert.equal(calls, 1)
+	}
+
+	const conflicting = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		fetch: async () =>
+			Response.json({
+				errors: [
+					{
+						message: 'An entry with this name already exists',
+						extensions: { code: 'CONFLICT', entryId: 'existing' },
+					},
+				],
+			}),
+	})
+	await assert.rejects(
+		conflicting.createEncyclopediaEntry({
+			universeId: 'universe',
+			name: 'Nemo',
+			categoryTitle: 'Characters',
+		}),
+		(error) =>
+			error instanceof LiteraryUniverseApiError &&
+			error.code === 'CONFLICT' &&
+			error.resourceId === 'existing',
+	)
 })

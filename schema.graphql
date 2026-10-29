@@ -72,6 +72,13 @@ type Query {
   authorValidateChapterDraft(input: AuthorDraftSaveInput!): AuthorDraftValidation!
   authorChapterDraftRecovery(id: ID!, recoveryId: ID!): AuthorChapterDraft
   authorImagePolicy: JSON!
+
+  """A page of a universe's encyclopedia entries, drafts included."""
+  authorEncyclopediaEntries(universeId: ID!, first: Int = 25, after: String): AuthorEncyclopediaEntryConnection!
+  authorEncyclopediaEntry(id: ID!, language: Locale): AuthorEncyclopediaEntry
+
+  """The saved series of a universe."""
+  authorSeries(universeId: ID!): [AuthorSeries!]!
 }
 
 enum AuthorWorkState {
@@ -195,6 +202,73 @@ type Mutation {
   authorPublishChapter(input: AuthorChapterPublishInput!): AuthorChapterPublishResult!
   authorCreateChapter(input: AuthorChapterCreateInput!): AuthorChapterCreateResult!
   authorSaveChapterDraft(input: AuthorDraftSaveInput!): AuthorDraftSaveResult!
+
+  """
+  Hide a published story from readers, or show it again. Fails with
+  BAD_USER_INPUT for a story that was never published.
+  """
+  setAuthorStoryVisibility(storyId: ID!, visibility: AuthorStoryVisibility!): AuthorStoryHeader!
+
+  """
+  Rename a chapter, published or not; the change shows to readers at once.
+  """
+  renameAuthorChapter(input: AuthorChapterRenameInput!): AuthorChapterHeader!
+
+  """
+  Remove a chapter that was never published and renumber the chapters after
+  it. Fails with FAILED_PRECONDITION for a chapter published in any language
+  or to beta readers, for the only chapter of a story, and for a story whose
+  arcs or free preview count chapters.
+  """
+  removeAuthorChapter(input: AuthorChapterRemoveInput!): AuthorChapterRemoval!
+
+  """
+  Put the chapters of a story in a new order. Fails with FAILED_PRECONDITION
+  for a story whose arcs or free preview count chapters.
+  """
+  reorderAuthorChapters(input: AuthorChapterReorderInput!): AuthorChapterOrder!
+
+  """
+  Change a universe's own title, address, description, genre, rating, license
+  or language. Fails with CONFLICT for a taken address.
+  """
+  updateAuthorUniverse(universeId: ID!, input: AuthorUniverseUpdateInput!): AuthorUniverseHeader!
+
+  """
+  Add a draft entry with its category's template fields. Fails with CONFLICT,
+  naming the existing entryId, when the universe has an entry of that name.
+  """
+  createAuthorEncyclopediaEntry(input: AuthorEncyclopediaEntryCreateInput!): AuthorEncyclopediaEntry!
+
+  """Change an entry in its original language."""
+  updateAuthorEncyclopediaEntry(id: ID!, changes: AuthorEncyclopediaEntryChangesInput!): AuthorEncyclopediaEntry!
+
+  """
+  Write an entry's edition in a language the universe is translated into.
+  Fails with FAILED_PRECONDITION for any other language.
+  """
+  translateAuthorEncyclopediaEntry(input: AuthorEncyclopediaEntryTranslationInput!): AuthorEncyclopediaEntry!
+
+  """Publish an entry to readers, or take it back to a draft."""
+  setAuthorEncyclopediaEntryPublication(id: ID!, published: Boolean!): AuthorEncyclopediaEntry!
+
+  """
+  Delete an entry and its links from other entries. Staff can restore it.
+  """
+  deleteAuthorEncyclopediaEntry(id: ID!): AuthorEncyclopediaEntryDeletion!
+
+  """
+  Create a series, or replace one, as a line of stories in reading order.
+  Fails with VERSION_CONFLICT, and changes nothing, when the series is no
+  longer at expectedVersion.
+  """
+  saveAuthorSeries(input: AuthorSeriesSaveInput!): AuthorSeries!
+
+  """
+  Change a story's details. Fails with FORBIDDEN for a universe the
+  credential cannot use, and FAILED_PRECONDITION for a rating under review.
+  """
+  updateAuthorStory(storyId: ID!, input: AuthorStoryUpdateInput!): AuthorStoryHeader!
 }
 
 type AuthorChapterHeader {
@@ -300,6 +374,230 @@ type AuthorChapterPublishResult {
   publishedAt: DateTime!
   chapterPublishedAt: DateTime
   warnings: [AuthorContentWarning!]!
+}
+
+enum AuthorStoryVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+input AuthorChapterRenameInput {
+  id: ID!
+
+  """A translation's language renames that edition; the original otherwise."""
+  language: Locale
+  title: String!
+}
+
+type AuthorChapterRemoval {
+  id: ID!
+  storyId: ID!
+}
+
+type AuthorChapterOrder {
+  storyId: ID!
+  chapterIds: [ID!]!
+}
+
+input AuthorChapterRemoveInput {
+  id: ID!
+}
+
+input AuthorChapterReorderInput {
+  storyId: ID!
+
+  """Every chapter of the story, each once, in the new reading order."""
+  chapterIds: [ID!]!
+}
+
+"""Only the given fields change."""
+input AuthorUniverseUpdateInput {
+  title: String
+
+  """The address segment: lowercase letters, digits and single hyphens."""
+  slug: String
+  description: String
+
+  """A genre value, as the genre list names it."""
+  genre: String
+  rating: String
+  license: String
+  language: Locale
+}
+
+type AuthorEncyclopediaEntryHeader {
+  id: ID!
+  universeId: ID!
+  name: String!
+  categoryId: ID!
+  categoryTitle: String
+
+  """
+  The language shown: the one asked for when the entry has it, else the original.
+  """
+  language: Locale!
+
+  """A draft that readers do not see."""
+  wip: Boolean!
+  publishedAt: DateTime
+  updatedAt: DateTime
+
+  """Languages the entry has besides its original."""
+  translations: [Locale!]!
+}
+
+type AuthorEncyclopediaEntryConnection {
+  nodes: [AuthorEncyclopediaEntryHeader!]!
+  pageInfo: AuthorPageInfo!
+}
+
+type AuthorEncyclopediaLink {
+  id: ID
+  name: String!
+}
+
+type AuthorEncyclopediaField {
+  id: ID!
+  title: String!
+
+  """
+  text, textarea, time, connections, image, canvas…; text and textarea take text.
+  """
+  type: String!
+  private: Boolean!
+  text: String
+}
+
+type AuthorEncyclopediaEntry {
+  id: ID!
+  universeId: ID!
+  name: String!
+  categoryId: ID!
+  categoryTitle: String
+  language: Locale!
+  wip: Boolean!
+  publishedAt: DateTime
+  updatedAt: DateTime
+  translations: [Locale!]!
+  pronunciation: String
+  tags: [String!]!
+  summary: String
+  parent: AuthorEncyclopediaLink
+  related: [AuthorEncyclopediaLink!]!
+  fields: [AuthorEncyclopediaField!]!
+}
+
+"""A field by its title; a new title adds a text field."""
+input AuthorEncyclopediaTextFieldInput {
+  title: String!
+  text: String!
+}
+
+"""A date like 1402-03-01, or HH:MM in a clock field."""
+input AuthorEncyclopediaTimeFieldInput {
+  title: String!
+  value: String!
+}
+
+"""Only the given values change. Entries are named by their names."""
+input AuthorEncyclopediaEntryChangesInput {
+  name: String
+  pronunciation: String
+  tags: [String!]
+  categoryTitle: String
+
+  """null removes the parent."""
+  parentName: String
+  relatedAdd: [String!]
+  relatedRemove: [String!]
+  summary: String
+  fields: [AuthorEncyclopediaTextFieldInput!]
+  timeFields: [AuthorEncyclopediaTimeFieldInput!]
+}
+
+type AuthorEncyclopediaEntryDeletion {
+  id: ID!
+  universeId: ID!
+}
+
+input AuthorEncyclopediaEntryCreateInput {
+  universeId: ID!
+  name: String!
+
+  """A category available in the universe, by title."""
+  categoryTitle: String!
+  pronunciation: String
+  tags: [String!]
+  parentName: String
+  relatedAdd: [String!]
+  summary: String
+  fields: [AuthorEncyclopediaTextFieldInput!]
+  timeFields: [AuthorEncyclopediaTimeFieldInput!]
+}
+
+input AuthorEncyclopediaFieldTranslationInput {
+  """The field's title in the original language."""
+  title: String!
+  translatedTitle: String
+  text: String!
+}
+
+input AuthorEncyclopediaEntryTranslationInput {
+  id: ID!
+
+  """A language the universe is translated into."""
+  language: Locale!
+  name: String
+  pronunciation: String
+  summary: String
+  fields: [AuthorEncyclopediaFieldTranslationInput!]
+}
+
+type AuthorSeries {
+  id: ID!
+  universeId: ID!
+  title: String!
+
+  """
+  Advances with every save; pass it as expectedVersion to change the series.
+  """
+  version: Int!
+
+  """The stories in reading order."""
+  storyIds: [ID!]!
+  updatedAt: DateTime
+}
+
+input AuthorSeriesSaveInput {
+  universeId: ID!
+
+  """Leave out to create a series."""
+  seriesId: ID
+
+  """The version read with the series; 0 for a new one."""
+  expectedVersion: Int!
+  title: String!
+
+  """Stories of the universe, not fan fiction, in reading order."""
+  storyIds: [ID!]!
+}
+
+"""Only the given fields change."""
+input AuthorStoryUpdateInput {
+  title: String
+  description: String
+
+  """Genre values, as the genre list names them."""
+  genres: [String!]
+  tags: [String!]
+  rating: String
+  license: String
+  language: Locale
+
+  """
+  Another universe needs edit rights on it; null makes the story standalone.
+  """
+  universeId: ID
 }
 
 scalar Date

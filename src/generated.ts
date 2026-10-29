@@ -48,6 +48,123 @@ export type AuthorChapterPublishInput = {
   audience?: AuthorPublicationAudience | null | undefined;
 };
 
+export type AuthorStoryVisibility =
+  | 'PUBLIC'
+  | 'PRIVATE';
+
+export type AuthorChapterRenameInput = {
+  id: string | number;
+  /** A translation's language renames that edition; the original otherwise. */
+  language?: string | null | undefined;
+  title: string;
+};
+
+export type AuthorChapterRemoveInput = {
+  id: string | number;
+};
+
+export type AuthorChapterReorderInput = {
+  storyId: string | number;
+  /** Every chapter of the story, each once, in the new reading order. */
+  chapterIds: Array<string | number>;
+};
+
+/** Only the given fields change. */
+export type AuthorUniverseUpdateInput = {
+  title?: string | null | undefined;
+  /** The address segment: lowercase letters, digits and single hyphens. */
+  slug?: string | null | undefined;
+  description?: string | null | undefined;
+  /** A genre value, as the genre list names it. */
+  genre?: string | null | undefined;
+  rating?: string | null | undefined;
+  license?: string | null | undefined;
+  language?: string | null | undefined;
+};
+
+/** A field by its title; a new title adds a text field. */
+export type AuthorEncyclopediaTextFieldInput = {
+  title: string;
+  text: string;
+};
+
+/** A date like 1402-03-01, or HH:MM in a clock field. */
+export type AuthorEncyclopediaTimeFieldInput = {
+  title: string;
+  value: string;
+};
+
+/** Only the given values change. Entries are named by their names. */
+export type AuthorEncyclopediaEntryChangesInput = {
+  name?: string | null | undefined;
+  pronunciation?: string | null | undefined;
+  tags?: Array<string> | null | undefined;
+  categoryTitle?: string | null | undefined;
+  /** null removes the parent. */
+  parentName?: string | null | undefined;
+  relatedAdd?: Array<string> | null | undefined;
+  relatedRemove?: Array<string> | null | undefined;
+  summary?: string | null | undefined;
+  fields?: Array<AuthorEncyclopediaTextFieldInput> | null | undefined;
+  timeFields?: Array<AuthorEncyclopediaTimeFieldInput> | null | undefined;
+};
+
+export type AuthorEncyclopediaEntryCreateInput = {
+  universeId: string | number;
+  name: string;
+  /** A category available in the universe, by title. */
+  categoryTitle: string;
+  pronunciation?: string | null | undefined;
+  tags?: Array<string> | null | undefined;
+  parentName?: string | null | undefined;
+  relatedAdd?: Array<string> | null | undefined;
+  summary?: string | null | undefined;
+  fields?: Array<AuthorEncyclopediaTextFieldInput> | null | undefined;
+  timeFields?: Array<AuthorEncyclopediaTimeFieldInput> | null | undefined;
+};
+
+export type AuthorEncyclopediaFieldTranslationInput = {
+  /** The field's title in the original language. */
+  title: string;
+  translatedTitle?: string | null | undefined;
+  text: string;
+};
+
+export type AuthorEncyclopediaEntryTranslationInput = {
+  id: string | number;
+  /** A language the universe is translated into. */
+  language: string;
+  name?: string | null | undefined;
+  pronunciation?: string | null | undefined;
+  summary?: string | null | undefined;
+  fields?: Array<AuthorEncyclopediaFieldTranslationInput> | null | undefined;
+};
+
+export type AuthorSeriesSaveInput = {
+  universeId: string | number;
+  /** Leave out to create a series. */
+  seriesId?: string | number | null | undefined;
+  /** The version read with the series; 0 for a new one. */
+  expectedVersion: number;
+  title: string;
+  /** Stories of the universe, not fan fiction, in reading order. */
+  storyIds: Array<string | number>;
+};
+
+/** Only the given fields change. */
+export type AuthorStoryUpdateInput = {
+  title?: string | null | undefined;
+  description?: string | null | undefined;
+  /** Genre values, as the genre list names them. */
+  genres?: Array<string> | null | undefined;
+  tags?: Array<string> | null | undefined;
+  rating?: string | null | undefined;
+  license?: string | null | undefined;
+  language?: string | null | undefined;
+  /** Another universe needs edit rights on it; null makes the story standalone. */
+  universeId?: string | number | null | undefined;
+};
+
 export type LuIdentityQueryVariables = Exact<{ [key: string]: never; }>;
 
 
@@ -161,6 +278,119 @@ export type LuUpdateUniverseTranslationMutationVariables = Exact<{
 
 export type LuUpdateUniverseTranslationMutation = { result: { language: string, title: string, description: string | null, revision: number } };
 
+export type LuUpdateStoryMutationVariables = Exact<{
+  storyId: string | number;
+  input: AuthorStoryUpdateInput;
+}>;
+
+
+export type LuUpdateStoryMutation = { result: { id: string, title: string, slug: string | null, language: string, universeId: string | null, organizationId: string | null, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null, state: AuthorWorkState } };
+
+export type LuSetStoryVisibilityMutationVariables = Exact<{
+  storyId: string | number;
+  visibility: AuthorStoryVisibility;
+}>;
+
+
+export type LuSetStoryVisibilityMutation = { result: { id: string, title: string, slug: string | null, language: string, universeId: string | null, organizationId: string | null, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null, state: AuthorWorkState } };
+
+export type LuRenameChapterMutationVariables = Exact<{
+  input: AuthorChapterRenameInput;
+}>;
+
+
+export type LuRenameChapterMutation = { result: { id: string, storyId: string, sequence: number, title: string, language: string, hasDraft: boolean, updatedAt: string | null, publishedAt: string | null } };
+
+export type LuRemoveChapterMutationVariables = Exact<{
+  input: AuthorChapterRemoveInput;
+}>;
+
+
+export type LuRemoveChapterMutation = { result: { id: string, storyId: string } };
+
+export type LuReorderChaptersMutationVariables = Exact<{
+  input: AuthorChapterReorderInput;
+}>;
+
+
+export type LuReorderChaptersMutation = { result: { storyId: string, chapterIds: Array<string> } };
+
+export type LuUpdateUniverseMutationVariables = Exact<{
+  universeId: string | number;
+  input: AuthorUniverseUpdateInput;
+}>;
+
+
+export type LuUpdateUniverseMutation = { result: { id: string, title: string, slug: string | null, language: string, organizationId: string | null, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null, state: AuthorWorkState } };
+
+export type LuEncyclopediaEntriesQueryVariables = Exact<{
+  universeId: string | number;
+  first?: number | null | undefined;
+  after?: string | null | undefined;
+}>;
+
+
+export type LuEncyclopediaEntriesQuery = { result: { nodes: Array<{ id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string> }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+
+export type LuEncyclopediaEntryQueryVariables = Exact<{
+  id: string | number;
+  language?: string | null | undefined;
+}>;
+
+
+export type LuEncyclopediaEntryQuery = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null }> } | null };
+
+export type LuCreateEncyclopediaEntryMutationVariables = Exact<{
+  input: AuthorEncyclopediaEntryCreateInput;
+}>;
+
+
+export type LuCreateEncyclopediaEntryMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null }> } };
+
+export type LuUpdateEncyclopediaEntryMutationVariables = Exact<{
+  id: string | number;
+  changes: AuthorEncyclopediaEntryChangesInput;
+}>;
+
+
+export type LuUpdateEncyclopediaEntryMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null }> } };
+
+export type LuTranslateEncyclopediaEntryMutationVariables = Exact<{
+  input: AuthorEncyclopediaEntryTranslationInput;
+}>;
+
+
+export type LuTranslateEncyclopediaEntryMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null }> } };
+
+export type LuSetEncyclopediaEntryPublicationMutationVariables = Exact<{
+  id: string | number;
+  published: boolean;
+}>;
+
+
+export type LuSetEncyclopediaEntryPublicationMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null }> } };
+
+export type LuDeleteEncyclopediaEntryMutationVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type LuDeleteEncyclopediaEntryMutation = { result: { id: string, universeId: string } };
+
+export type LuSeriesQueryVariables = Exact<{
+  universeId: string | number;
+}>;
+
+
+export type LuSeriesQuery = { result: Array<{ id: string, universeId: string, title: string, version: number, storyIds: Array<string>, updatedAt: string | null }> };
+
+export type LuSaveSeriesMutationVariables = Exact<{
+  input: AuthorSeriesSaveInput;
+}>;
+
+
+export type LuSaveSeriesMutation = { result: { id: string, universeId: string, title: string, version: number, storyIds: Array<string>, updatedAt: string | null } };
+
 export type LuImagePolicyQueryVariables = Exact<{ [key: string]: never; }>;
 
 
@@ -181,4 +411,19 @@ export const LuCreateChapterDocument = "mutation LuCreateChapter($input: AuthorC
 export const LuPublishChapterDocument = "mutation LuPublishChapter($input: AuthorChapterPublishInput!) {\n  result: authorPublishChapter(input: $input) {\n    id\n    storyId\n    language\n    revisionId\n    version\n    audience\n    publishedAt\n    chapterPublishedAt\n    warnings {\n      code\n      path\n      message\n    }\n  }\n}" as const
 export const LuCreateUniverseTranslationDocument = "mutation LuCreateUniverseTranslation($universeId: ID!, $language: Locale!, $input: AuthorUniverseTranslationInput) {\n  result: createAuthorUniverseTranslation(\n    universeId: $universeId\n    language: $language\n    input: $input\n  ) {\n    created\n    translation {\n      language\n      title\n      description\n      revision\n    }\n  }\n}" as const
 export const LuUpdateUniverseTranslationDocument = "mutation LuUpdateUniverseTranslation($universeId: ID!, $language: Locale!, $expectedRevision: Int!, $input: AuthorUniverseTranslationInput!) {\n  result: updateAuthorUniverseTranslation(\n    universeId: $universeId\n    language: $language\n    expectedRevision: $expectedRevision\n    input: $input\n  ) {\n    language\n    title\n    description\n    revision\n  }\n}" as const
+export const LuUpdateStoryDocument = "mutation LuUpdateStory($storyId: ID!, $input: AuthorStoryUpdateInput!) {\n  result: updateAuthorStory(storyId: $storyId, input: $input) {\n    id\n    title\n    slug\n    language\n    universeId\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n  }\n}" as const
+export const LuSetStoryVisibilityDocument = "mutation LuSetStoryVisibility($storyId: ID!, $visibility: AuthorStoryVisibility!) {\n  result: setAuthorStoryVisibility(storyId: $storyId, visibility: $visibility) {\n    id\n    title\n    slug\n    language\n    universeId\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n  }\n}" as const
+export const LuRenameChapterDocument = "mutation LuRenameChapter($input: AuthorChapterRenameInput!) {\n  result: renameAuthorChapter(input: $input) {\n    id\n    storyId\n    sequence\n    title\n    language\n    hasDraft\n    updatedAt\n    publishedAt\n  }\n}" as const
+export const LuRemoveChapterDocument = "mutation LuRemoveChapter($input: AuthorChapterRemoveInput!) {\n  result: removeAuthorChapter(input: $input) {\n    id\n    storyId\n  }\n}" as const
+export const LuReorderChaptersDocument = "mutation LuReorderChapters($input: AuthorChapterReorderInput!) {\n  result: reorderAuthorChapters(input: $input) {\n    storyId\n    chapterIds\n  }\n}" as const
+export const LuUpdateUniverseDocument = "mutation LuUpdateUniverse($universeId: ID!, $input: AuthorUniverseUpdateInput!) {\n  result: updateAuthorUniverse(universeId: $universeId, input: $input) {\n    id\n    title\n    slug\n    language\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n  }\n}" as const
+export const LuEncyclopediaEntriesDocument = "query LuEncyclopediaEntries($universeId: ID!, $first: Int, $after: String) {\n  result: authorEncyclopediaEntries(\n    universeId: $universeId\n    first: $first\n    after: $after\n  ) {\n    nodes {\n      id\n      universeId\n      name\n      categoryId\n      categoryTitle\n      language\n      wip\n      publishedAt\n      updatedAt\n      translations\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
+export const LuEncyclopediaEntryDocument = "query LuEncyclopediaEntry($id: ID!, $language: Locale) {\n  result: authorEncyclopediaEntry(id: $id, language: $language) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n    }\n  }\n}" as const
+export const LuCreateEncyclopediaEntryDocument = "mutation LuCreateEncyclopediaEntry($input: AuthorEncyclopediaEntryCreateInput!) {\n  result: createAuthorEncyclopediaEntry(input: $input) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n    }\n  }\n}" as const
+export const LuUpdateEncyclopediaEntryDocument = "mutation LuUpdateEncyclopediaEntry($id: ID!, $changes: AuthorEncyclopediaEntryChangesInput!) {\n  result: updateAuthorEncyclopediaEntry(id: $id, changes: $changes) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n    }\n  }\n}" as const
+export const LuTranslateEncyclopediaEntryDocument = "mutation LuTranslateEncyclopediaEntry($input: AuthorEncyclopediaEntryTranslationInput!) {\n  result: translateAuthorEncyclopediaEntry(input: $input) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n    }\n  }\n}" as const
+export const LuSetEncyclopediaEntryPublicationDocument = "mutation LuSetEncyclopediaEntryPublication($id: ID!, $published: Boolean!) {\n  result: setAuthorEncyclopediaEntryPublication(id: $id, published: $published) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n    }\n  }\n}" as const
+export const LuDeleteEncyclopediaEntryDocument = "mutation LuDeleteEncyclopediaEntry($id: ID!) {\n  result: deleteAuthorEncyclopediaEntry(id: $id) {\n    id\n    universeId\n  }\n}" as const
+export const LuSeriesDocument = "query LuSeries($universeId: ID!) {\n  result: authorSeries(universeId: $universeId) {\n    id\n    universeId\n    title\n    version\n    storyIds\n    updatedAt\n  }\n}" as const
+export const LuSaveSeriesDocument = "mutation LuSaveSeries($input: AuthorSeriesSaveInput!) {\n  result: saveAuthorSeries(input: $input) {\n    id\n    universeId\n    title\n    version\n    storyIds\n    updatedAt\n  }\n}" as const
 export const LuImagePolicyDocument = "query LuImagePolicy {\n  result: authorImagePolicy\n}" as const

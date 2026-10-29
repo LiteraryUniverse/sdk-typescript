@@ -67,4 +67,83 @@ mutation LuUpdateUniverseTranslation($universeId: ID!, $language: Locale!, $expe
   }
 }
 
+mutation LuUpdateStory($storyId: ID!, $input: AuthorStoryUpdateInput!) {
+  result: updateAuthorStory(storyId: $storyId, input: $input) { id title slug language universeId organizationId createdAt updatedAt publishedAt privateAt state }
+}
+mutation LuSetStoryVisibility($storyId: ID!, $visibility: AuthorStoryVisibility!) {
+  result: setAuthorStoryVisibility(storyId: $storyId, visibility: $visibility) { id title slug language universeId organizationId createdAt updatedAt publishedAt privateAt state }
+}
+mutation LuRenameChapter($input: AuthorChapterRenameInput!) {
+  result: renameAuthorChapter(input: $input) { id storyId sequence title language hasDraft updatedAt publishedAt }
+}
+mutation LuRemoveChapter($input: AuthorChapterRemoveInput!) {
+  result: removeAuthorChapter(input: $input) { id storyId }
+}
+mutation LuReorderChapters($input: AuthorChapterReorderInput!) {
+  result: reorderAuthorChapters(input: $input) { storyId chapterIds }
+}
+mutation LuUpdateUniverse($universeId: ID!, $input: AuthorUniverseUpdateInput!) {
+  result: updateAuthorUniverse(universeId: $universeId, input: $input) { id title slug language organizationId createdAt updatedAt publishedAt privateAt state }
+}
+query LuEncyclopediaEntries($universeId: ID!, $first: Int, $after: String) {
+  result: authorEncyclopediaEntries(universeId: $universeId, first: $first, after: $after) {
+    nodes { id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations }
+    pageInfo { endCursor hasNextPage }
+  }
+}
+query LuEncyclopediaEntry($id: ID!, $language: Locale) {
+  result: authorEncyclopediaEntry(id: $id, language: $language) {
+    id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations
+    pronunciation tags summary
+    parent { id name }
+    related { id name }
+    fields { id title type private text }
+  }
+}
+mutation LuCreateEncyclopediaEntry($input: AuthorEncyclopediaEntryCreateInput!) {
+  result: createAuthorEncyclopediaEntry(input: $input) {
+    id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations
+    pronunciation tags summary
+    parent { id name }
+    related { id name }
+    fields { id title type private text }
+  }
+}
+mutation LuUpdateEncyclopediaEntry($id: ID!, $changes: AuthorEncyclopediaEntryChangesInput!) {
+  result: updateAuthorEncyclopediaEntry(id: $id, changes: $changes) {
+    id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations
+    pronunciation tags summary
+    parent { id name }
+    related { id name }
+    fields { id title type private text }
+  }
+}
+mutation LuTranslateEncyclopediaEntry($input: AuthorEncyclopediaEntryTranslationInput!) {
+  result: translateAuthorEncyclopediaEntry(input: $input) {
+    id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations
+    pronunciation tags summary
+    parent { id name }
+    related { id name }
+    fields { id title type private text }
+  }
+}
+mutation LuSetEncyclopediaEntryPublication($id: ID!, $published: Boolean!) {
+  result: setAuthorEncyclopediaEntryPublication(id: $id, published: $published) {
+    id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations
+    pronunciation tags summary
+    parent { id name }
+    related { id name }
+    fields { id title type private text }
+  }
+}
+mutation LuDeleteEncyclopediaEntry($id: ID!) {
+  result: deleteAuthorEncyclopediaEntry(id: $id) { id universeId }
+}
+query LuSeries($universeId: ID!) {
+  result: authorSeries(universeId: $universeId) { id universeId title version storyIds updatedAt }
+}
+mutation LuSaveSeries($input: AuthorSeriesSaveInput!) {
+  result: saveAuthorSeries(input: $input) { id universeId title version storyIds updatedAt }
+}
+
 query LuImagePolicy { result: authorImagePolicy }
