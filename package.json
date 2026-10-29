@@ -58,10 +58,10 @@
   },
   "devDependencies": {
     "@graphql-codegen/typescript-operations": "6.2.0",
-    "graphql": "16.14.2",
-    "typescript": "5.9.3",
     "@types/node": "24.19.2",
-    "sharp": "0.35.5"
+    "graphql": "16.14.2",
+    "sharp": "0.35.5",
+    "typescript": "5.9.3"
   },
   "overrides": {
     "@graphql-tools/utils": "12.1.0"
@@ -82,8 +82,5 @@
   "homepage": "https://github.com/LiteraryUniverse/sdk-typescript#readme",
   "bugs": {
     "url": "https://github.com/LiteraryUniverse/sdk-typescript/issues"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
   }
 }
