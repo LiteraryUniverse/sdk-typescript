@@ -514,8 +514,53 @@ async function fetchDocs(options: McpToolOptions, url: string) {
 	const fetcher = options.fetch ?? globalThis.fetch
 	const response = await fetcher(target, {
 		signal: AbortSignal.timeout(30_000),
+		redirect: 'manual',
 	})
-	const text = (await response.text()).slice(0, 1_000_000)
+	if (response.status >= 300 && response.status < 400) {
+		await response.body?.cancel()
+		throw new LiteraryUniverseApiError(
+			'REDIRECTED',
+			'Docs redirects are not followed',
+		)
+	}
+	const reader =
+		typeof response.body?.getReader === 'function'
+			? response.body.getReader()
+			: undefined
+	// Nonstreaming fetch polyfills must buffer before the limit can be checked.
+	if (!reader) {
+		const bytes = new Uint8Array(await response.arrayBuffer())
+		if (bytes.byteLength > 1_000_000)
+			throw new LiteraryUniverseApiError(
+				'PAYLOAD_TOO_LARGE',
+				'Docs page exceeds the read size limit',
+			)
+		return {
+			url: target.href,
+			status: response.status,
+			text: new TextDecoder().decode(bytes),
+		}
+	}
+	const chunks: Uint8Array[] = []
+	let size = 0
+	try {
+		while (true) {
+			const { done, value } = await reader.read()
+			if (done) break
+			size += value.byteLength
+			if (size > 1_000_000) {
+				await reader.cancel()
+				throw new LiteraryUniverseApiError(
+					'PAYLOAD_TOO_LARGE',
+					'Docs page exceeds the read size limit',
+				)
+			}
+			chunks.push(value)
+		}
+	} finally {
+		reader.releaseLock()
+	}
+	const text = new TextDecoder().decode(Buffer.concat(chunks))
 	return { url: target.href, status: response.status, text }
 }
 const docs: Record<string, Spec> = {
@@ -594,8 +639,8 @@ export function selectTools(
 ): string[] {
 	const names = (selection ?? DEFAULT_TOOL_SELECTION).flatMap((entry) => {
 		if (entry === 'all') return Object.keys(TOOLS)
-		if (entry in TOOL_CATEGORIES) return TOOL_CATEGORIES[entry]
-		if (entry in TOOLS) return [entry]
+		if (Object.hasOwn(TOOL_CATEGORIES, entry)) return TOOL_CATEGORIES[entry]
+		if (Object.hasOwn(TOOLS, entry)) return [entry]
 		throw new LiteraryUniverseApiError(
 			'INVALID_CONFIGURATION',
 			`Unknown tool or category: ${entry}`,

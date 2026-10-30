@@ -3,6 +3,7 @@ import {
 	existsSync,
 	lstatSync,
 	mkdirSync,
+	mkdtempSync,
 	readFileSync,
 	realpathSync,
 	renameSync,
@@ -93,7 +94,9 @@ function lossyTypes(node: JsonValue, found = new Set<string>()) {
 	for (const value of Object.values(node)) lossyTypes(value, found)
 	return found
 }
-const FRONTMATTER = /^---\n(?:[^\n]*\n)*?---\n(?:# [^\n]*\n)?\n?/
+const FRONTMATTER = /^---\n(?:[^\n]*\n)*?---\n/
+const MARKDOWN_NOTICE =
+	/^# (?:This chapter has no Markdown form yet;[^\n]*|Edit chapters\/[^\n]* instead: this chapter contains [^\n]*)\n/
 /** Why the Markdown file must not be edited, or undefined when it may be. */
 function markdownNotice(draft: Draft) {
 	if (draft.content == null || draft.markdown == null)
@@ -160,7 +163,11 @@ function readJson(root: string, file: string): JsonValue {
 
 /** The Markdown body: the file without its frontmatter, with LF line ends. */
 const readBody = (root: string, file: string) =>
-	readText(root, file).replaceAll('\r\n', '\n').replace(FRONTMATTER, '')
+	readText(root, file)
+		.replaceAll('\r\n', '\n')
+		.replace(FRONTMATTER, '')
+		.replace(MARKDOWN_NOTICE, '')
+		.replace(/^\n/, '')
 
 function clearDeadLock(root: string) {
 	const existing = readJson(root, '.lu/lock') as {
@@ -478,10 +485,36 @@ export async function refreshLocalProject(
 		)
 			failure('LOCAL_CHANGES', 'Push or revert local changes before refreshing')
 		const previous = project.chapters
-		project.chapters = []
-		await pullPages(client, root, project, project.language)
-		writeJson(root, '.lu/project.json', project)
-		return reconcile(root, previous, project)
+		const staging = mkdtempSync(join(root, '.lu-refresh-'))
+		try {
+			initializeProject(staging)
+			project.chapters = []
+			await pullPages(client, staging, project, project.language)
+			// Editors do not share our lock. Check again after the network reads.
+			if (previous.some((chapter) => inspect(root, chapter).source !== 'none'))
+				failure('LOCAL_CHANGES', 'Local changes appeared while refreshing')
+			const managed = new Set(
+				previous.flatMap((chapter) => [
+					chapter.file,
+					chapter.markdown?.file,
+					`.lu/${chapter.file.split('/')[1]}`,
+				]),
+			)
+			const files = project.chapters.flatMap((chapter) => [
+				chapter.file,
+				...(chapter.markdown ? [chapter.markdown.file] : []),
+				`.lu/${chapter.file.split('/')[1]}`,
+			])
+			for (const file of files) {
+				if (existsSync(pathFor(root, file)) && !managed.has(file))
+					failure('LOCAL_CHANGES', 'Refresh would overwrite an unmanaged file')
+			}
+			for (const file of files) writeText(root, file, readText(staging, file))
+			writeJson(root, '.lu/project.json', project)
+			return reconcile(root, previous, project)
+		} finally {
+			rmSync(staging, { recursive: true, force: true })
+		}
 	} finally {
 		release()
 	}

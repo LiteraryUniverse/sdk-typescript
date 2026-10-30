@@ -308,3 +308,68 @@ test('the CommonJS build exposes the same MCP entry', () => {
 	assert.equal(typeof mcp.registerLiteraryUniverseTools, 'function')
 	assert.deepEqual(mcp.selectTools(['publish']), ['publish-chapter'])
 })
+
+test('inherited object names are rejected as tool selections', () => {
+	for (const name of [
+		'toString',
+		'constructor',
+		'__proto__',
+		'hasOwnProperty',
+	]) {
+		assert.throws(() => selectTools([name]), { code: 'INVALID_CONFIGURATION' })
+	}
+})
+
+test('docs fetch refuses redirects and cancels oversized streams', async () => {
+	let cancelled = false
+	let reads = 0
+	const { call } = await connect({
+		tools: ['docs'],
+		docsBaseUrl: 'https://docs.test',
+		fetch: async (url, init) => {
+			assert.equal(init.redirect, 'manual')
+			if (String(url).includes('/redirect/')) {
+				return new Response(null, {
+					status: 302,
+					headers: { location: 'http://127.0.0.1/private' },
+				})
+			}
+			return new Response(
+				new ReadableStream({
+					pull(controller) {
+						reads++
+						controller.enqueue(new Uint8Array(600_000))
+					},
+					cancel() {
+						cancelled = true
+					},
+				}),
+			)
+		},
+	})
+	assert.match(
+		(await call('fetch-lu-docs', { url: '/redirect/llms.txt' })).content[0]
+			.text,
+		/^REDIRECTED:/,
+	)
+	assert.match(
+		(await call('fetch-lu-docs', { url: '/large/llms.txt' })).content[0].text,
+		/^PAYLOAD_TOO_LARGE:/,
+	)
+	assert.ok(cancelled)
+	assert.ok(reads <= 3)
+})
+
+test('docs fetch supports a Response polyfill without a body stream', async () => {
+	const { call } = await connect({
+		tools: ['docs'],
+		docsBaseUrl: 'https://docs.test',
+		fetch: async () => ({
+			status: 200,
+			arrayBuffer: async () =>
+				new TextEncoder().encode('Polyfilled docs').buffer,
+		}),
+	})
+	const result = await call('fetch-lu-docs', { url: '/story/llms.txt' })
+	assert.equal(result.content[0].text, 'Polyfilled docs')
+})

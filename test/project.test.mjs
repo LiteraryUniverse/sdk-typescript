@@ -418,3 +418,121 @@ test('a manifest without a Markdown mirror still loads and gains one on save', a
 		rmSync(directory, { recursive: true, force: true })
 	}
 })
+
+test('a heading directly after frontmatter remains part of the saved body', async () => {
+	const { directory, client, sent } = await pulled([draft('a', 1, 'A', 'a')])
+	try {
+		edit(
+			directory,
+			markdownFile(directory, 'a'),
+			'---\nid: "a"\n---\n# Chapter heading\n\nBody',
+		)
+		await pushLocalProject(client, { directory, baseUrl })
+		assert.equal(
+			sent.find((request) => request.operationName === 'LuSaveDraft').variables
+				.input.markdown,
+			'# Chapter heading\n\nBody',
+		)
+	} finally {
+		rmSync(directory, { recursive: true, force: true })
+	}
+})
+
+test('a failed refresh preserves every tracked chapter and its files', async () => {
+	const drafts = [draft('a', 1, 'A', 'a'), draft('b', 2, 'B', 'b')]
+	const { directory, client } = await pulled(drafts)
+	try {
+		const before = readFileSync(join(directory, '.lu/project.json'), 'utf8')
+		Object.assign(drafts[0], { markdown: 'remote edit', version: 'v2' })
+		const readDraft = client.draft.bind(client)
+		client.draft = (input) => {
+			if (input.id === 'b') throw new Error('Connection lost')
+			return readDraft(input)
+		}
+		await assert.rejects(
+			refreshLocalProject(client, { directory, baseUrl }),
+			/Connection lost/,
+		)
+		assert.equal(
+			readFileSync(join(directory, '.lu/project.json'), 'utf8'),
+			before,
+		)
+		assert.match(
+			readFileSync(join(directory, markdownFile(directory, 'a')), 'utf8'),
+			/\n\na$/,
+		)
+		edit(directory, markdownFile(directory, 'b'), 'local edit')
+		client.draft = readDraft
+		await assert.rejects(refreshLocalProject(client, { directory, baseUrl }), {
+			code: 'LOCAL_CHANGES',
+		})
+	} finally {
+		rmSync(directory, { recursive: true, force: true })
+	}
+})
+
+test('refresh preserves edits made during remote reads and unmanaged filename collisions', async () => {
+	const drafts = [draft('a', 1, 'A', 'a')]
+	const { directory, client } = await pulled(drafts)
+	try {
+		const readDraft = client.draft.bind(client)
+		const file = markdownFile(directory, 'a')
+		client.draft = async (input) => {
+			edit(directory, file, 'concurrent edit')
+			return readDraft(input)
+		}
+		await assert.rejects(refreshLocalProject(client, { directory, baseUrl }), {
+			code: 'LOCAL_CHANGES',
+		})
+		assert.equal(readFileSync(join(directory, file), 'utf8'), 'concurrent edit')
+		client.draft = readDraft
+		edit(directory, file, 'a')
+		drafts.push(draft('b', 2, 'B', 'b'))
+		edit(directory, 'chapters/002-b.en.md', 'unmanaged manuscript')
+		await assert.rejects(refreshLocalProject(client, { directory, baseUrl }), {
+			code: 'LOCAL_CHANGES',
+		})
+		assert.equal(
+			readFileSync(join(directory, 'chapters/002-b.en.md'), 'utf8'),
+			'unmanaged manuscript',
+		)
+		assert.equal(readLocalProject(directory).chapters.length, 1)
+	} finally {
+		rmSync(directory, { recursive: true, force: true })
+	}
+})
+
+test('a lost Markdown save response replays its intent and preserves newer edits', async () => {
+	const { directory, client } = await pulled([draft('a', 1, 'A', 'a')])
+	try {
+		const file = markdownFile(directory, 'a')
+		edit(directory, file, 'first edit')
+		const saveDraft = client.saveDraft.bind(client)
+		let saved
+		let originalInput
+		client.saveDraft = async (input) => {
+			originalInput = input
+			saved = await saveDraft(input)
+			throw new Error('Lost response')
+		}
+		assert.equal(
+			(await pushLocalProject(client, { directory, baseUrl }))[0].status,
+			'failed',
+		)
+		assert.ok(readLocalProject(directory).chapters[0].pending)
+		edit(directory, file, 'newer edit')
+		client.saveDraft = async (input) => {
+			assert.deepEqual(input, originalInput)
+			return saved
+		}
+		assert.equal(
+			(await pushLocalProject(client, { directory, baseUrl }))[0].status,
+			'saved',
+		)
+		assert.equal(readFileSync(join(directory, file), 'utf8'), 'newer edit')
+		assert.equal(localProjectStatus(directory)[0].source, 'markdown')
+		assert.equal(readLocalProject(directory).chapters[0].pending, undefined)
+	} finally {
+		rmSync(directory, { recursive: true, force: true })
+	}
+})
