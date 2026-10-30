@@ -38,6 +38,16 @@
         "types": "./dist/cjs/images.d.ts",
         "default": "./dist/cjs/images.js"
       }
+    },
+    "./mcp": {
+      "import": {
+        "types": "./dist/esm/mcp.d.ts",
+        "default": "./dist/esm/mcp.js"
+      },
+      "require": {
+        "types": "./dist/cjs/mcp.d.ts",
+        "default": "./dist/cjs/mcp.js"
+      }
     }
   },
   "files": [
@@ -58,20 +68,30 @@
   },
   "devDependencies": {
     "@graphql-codegen/typescript-operations": "6.2.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@types/node": "24.19.2",
     "graphql": "16.14.2",
     "sharp": "0.35.5",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "zod": "4.6.7"
   },
   "overrides": {
     "@graphql-tools/utils": "12.1.0"
   },
   "license": "MIT",
   "peerDependencies": {
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "@modelcontextprotocol/sdk": "^1.32",
+    "zod": "^4"
   },
   "peerDependenciesMeta": {
     "sharp": {
+      "optional": true
+    },
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },

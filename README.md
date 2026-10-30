@@ -10,7 +10,7 @@ Read the [documentation in our feedback knowledge base](https://literaryuniverse
 for Literary Universe help. This README describes the SDK's current API contract.
 Report SDK bugs in [this repository](https://github.com/LiteraryUniverse/sdk-typescript/issues).
 
-The client uses the deployment's `/graphql` endpoint. The core client has no runtime dependencies and exports ESM and CommonJS builds. Local image preparation uses the optional Sharp dependency through the `/images` entry point. Node 22 or later and Bun are targets; see CI and local verification for tested versions. `/graphql` sends no CORS headers, so code running on another origin, including an Obsidian plugin, must pass a `fetch` that is not subject to CORS, for example one built on Obsidian's `requestUrl`.
+The client uses the deployment's `/graphql` endpoint. The core client has no runtime dependencies and exports ESM and CommonJS builds. Local image preparation uses the optional Sharp dependency through the `/images` entry point; `/project` manages a folder of chapter files, and `/mcp` registers the API as tools on an MCP server through the optional `@modelcontextprotocol/sdk` and `zod` peers. Node 22 or later and Bun are targets; see CI and local verification for tested versions. `/graphql` sends no CORS headers, so code running on another origin, including an Obsidian plugin, must pass a `fetch` that is not subject to CORS, for example one built on Obsidian's `requestUrl`.
 
 ## Install
 
@@ -222,6 +222,14 @@ const saved = await client.saveDraft(input)
 const before = await client.draftRecovery({ id: chapterId, recoveryId: saved.recoveryId })
 ```
 
+The input takes exactly one of `content` (Tiptap JSON) and `markdown`, a string in
+the form the draft's `markdown` field returns; the server converts it with the
+editor's own Markdown extension. Content without a Markdown form (ruby, play
+nodes, text alignment, initial letters, emoji, video and work cards, see
+`MARKDOWN_LOSSY_TYPES` in /project) round-trips only through `content`; a
+`markdown` save of such a draft fails with MARKDOWN_UNSUPPORTED. createChapter
+accepts `markdown` the same way.
+
 Retry an interrupted save with the same input and operation ID. A reused ID with
 changed input yields IDEMPOTENCY_CONFLICT; a changed draft yields VERSION_CONFLICT.
 The mutation changes body representations/counters only. Titles, notes, financial
@@ -308,6 +316,48 @@ The provider is covered by the request deadline. API keys remain the only
 supported credential kind; the provider interface leaves room for deliberate
 OAuth support later. Client names are bounded reported metadata for server audit.
 There are no automatic telemetry providers or exporters.
+
+## Local projects
+
+```ts
+import { pullLocalProject, localProjectStatus, pushLocalProject, refreshLocalProject }
+  from '@literary-universe/sdk/project'
+
+await pullLocalProject(client, { directory: 'my-story', baseUrl, storyId })
+localProjectStatus('my-story')   // [{ id, language, file, version, changed, source, pending }]
+await pushLocalProject(client, { directory: 'my-story', baseUrl })
+await refreshLocalProject(client, { directory: 'my-story', baseUrl })   // { added, updated, removed }
+```
+
+A pull writes every draft twice: `chapters/chapter-<id>.<lang>.json` holds the
+Tiptap document and `chapters/<seq>-<slug>.<lang>.md` mirrors it as Markdown.
+`seq` is the chapter sequence zero-padded to three digits and `slug` the title
+lower-cased with runs of other characters turned into hyphens, at most 60
+characters, `chapter` when nothing is left, numbered `-2`, `-3` on a collision.
+The Markdown file starts with YAML frontmatter (`id`, `title`, `language`,
+`version`, `editable`) followed by a blank line and the body; only the body is
+hashed and sent. A chapter whose content has no Markdown form gets
+`editable: false` and a `# Edit chapters/chapter-<id>.<lang>.json instead` line
+under the frontmatter; a legacy chapter the server has no Markdown form for yet
+(`content` and `markdown` null) gets `editable: false` and a line asking to open
+it once in the web editor and refresh. The manifest `.lu/project.json` stays at version 1;
+manifests without the `markdown` entry still load and gain the mirror on the
+next save.
+
+`localProjectStatus` reports `source` per chapter: `none`, `json`, `markdown` or
+`both`. A push sends `content` for `json` and `markdown` for `markdown`, then
+rewrites both files from the server's normalized draft. A chapter changed in
+both files fails locally with AMBIGUOUS_CHANGE, a Markdown edit of a chapter
+marked `editable: false` with MARKDOWN_UNSUPPORTED; nothing is sent for either.
+Revert one file to the manifest form to continue. Pending intents record which
+form was sent and replay unchanged after an interruption.
+
+`refreshLocalProject` re-pulls every chapter of an existing project. It refuses
+with LOCAL_CHANGES while any chapter is changed or pending; otherwise it rewrites
+files and manifest, renames Markdown mirrors whose title or sequence changed,
+deletes the files of chapters the server no longer has, and reports the chapter
+IDs added, updated and removed. `pullLocalProject` with `refresh: true` is the
+same call.
 
 ## Images
 
@@ -397,3 +447,41 @@ The monorepo provides a local storage fixture: run
 the isolated Meteor test server with that settings file, and stop both owned
 processes after verification. The fixture uses synthetic credentials and checks
 real S3 transport without contacting Backblaze. It is not a production server.
+
+## MCP server
+
+`@literary-universe/sdk/mcp` registers the authoring API as tools on a
+`McpServer` from `@modelcontextprotocol/sdk` (install it and `zod` in the host;
+the core client does not load them). The CLI's `lu mcp` and the hosted
+`https://literaryuniverse.com/mcp` endpoint use it.
+
+```ts
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { readFile } from 'node:fs/promises'
+import { LiteraryUniverseClient } from '@literary-universe/sdk'
+import { registerLiteraryUniverseTools } from '@literary-universe/sdk/mcp'
+
+const token = process.env.LU_TOKEN
+const client = token ? new LiteraryUniverseClient({ baseUrl, token }) : null
+const server = new McpServer({ name: 'literary-universe', version: '0.2.0' })
+registerLiteraryUniverseTools(server, { client: () => client, readLocalFile: readFile })
+await server.connect(new StdioServerTransport())
+```
+
+`client` is called per tool call so a host can refresh credentials; `null` makes
+every tool that needs an account answer `Not signed in to Literary Universe`.
+Tools are grouped in categories; `tools` selects categories and/or tool names
+(`'all'` for every tool) and replaces the default selection, which leaves out
+`publish`: `account`, `stories` (`list-stories`, `get-story`, `list-chapters`,
+`get-chapter-draft`), `stories-write` (`save-chapter-draft`, `create-chapter`,
+`update-story`, `set-story-visibility`, `rename-chapter`, `reorder-chapters`,
+`remove-chapter`), `publish` (`publish-chapter`, which does nothing without
+`confirm: true`), `universes`, `universes-write`, `images` (`set-cover` only with
+`readLocalFile`) and `docs` (`search-lu-docs`, `fetch-lu-docs`, usable without
+login; they read the site's `llms.txt` pages under `docsBaseUrl`). `selectTools`
+validates a selection without a server. Every tool carries a title, a zod input
+schema and the four MCP annotations; results carry `structuredContent` and a
+text form; API errors come back as `isError` text `CODE: message (request id)`,
+with the input schema appended for BAD_USER_INPUT. Resources `lu://story/{id}`
+and `lu://chapter/{id}/draft` return the same data as the tools.

@@ -24,7 +24,10 @@ export type AuthorDraftSaveInput = {
   language?: string | null | undefined;
   expectedVersion: string;
   operationId: string | number;
-  content: JsonValue;
+  /** Tiptap JSON. Provide exactly one of content and markdown. */
+  content?: JsonValue | null | undefined;
+  /** Markdown in the form the draft's markdown field returns. Converted on the server with the editor's own Markdown extension; content without a Markdown form round-trips only if its fenced form from a read is left intact. */
+  markdown?: string | null | undefined;
 };
 
 export type AuthorChapterCreateInput = {
@@ -32,6 +35,7 @@ export type AuthorChapterCreateInput = {
   operationId: string | number;
   title?: string | null | undefined;
   content?: JsonValue | null | undefined;
+  markdown?: string | null | undefined;
   isAIGenerated?: boolean | null | undefined;
 };
 
