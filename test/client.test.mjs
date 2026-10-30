@@ -779,3 +779,52 @@ test('does not repeat removals, creations or series saves, and names the entry h
 			error.resourceId === 'existing',
 	)
 })
+
+test('reads a polyfilled Response that has no body stream and still enforces the read ceiling', async () => {
+	// node-fetch style responses inside Meteor expose arrayBuffer() but no body.getReader().
+	const plain = (payload, status = 200) => ({
+		ok: status < 300,
+		status,
+		type: 'basic',
+		headers: new Headers({ 'x-request-id': 'polyfill' }),
+		arrayBuffer: async () => new TextEncoder().encode(payload).buffer,
+	})
+	const client = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		fetch: async () =>
+			plain(
+				JSON.stringify({
+					data: { result: { version: '1', userId: 'writer' } },
+				}),
+			),
+	})
+	assert.equal((await client.identity()).userId, 'writer')
+	const denied = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		fetch: async () =>
+			plain(
+				JSON.stringify({
+					errors: [{ message: 'Denied', extensions: { code: 'FORBIDDEN' } }],
+				}),
+			),
+	})
+	await assert.rejects(
+		denied.identity(),
+		(error) => error.code === 'FORBIDDEN' && error.requestId === 'polyfill',
+	)
+	const oversized = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		fetch: async () => ({
+			...plain(''),
+			arrayBuffer: async () => new ArrayBuffer(16 * 1024 * 1024 + 1),
+		}),
+	})
+	await assert.rejects(
+		oversized.identity(),
+		(error) =>
+			error.code === 'PAYLOAD_TOO_LARGE' && error.requestId === 'polyfill',
+	)
+})
