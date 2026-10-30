@@ -247,7 +247,8 @@ test('a chapter the server cannot read back from Markdown is marked and refused 
 				attrs: { textAlign: 'center' },
 				content: [{ type: 'ruby' }],
 			},
-			{ type: 'playScene' },
+			{ type: 'playSceneHeading' },
+			{ type: 'heading', attrs: { initialLetter: true } },
 			{
 				type: 'paragraph',
 				content: [{ type: 'text', text: 'x', marks: [{ type: 'textStyle' }] }],
@@ -263,7 +264,7 @@ test('a chapter the server cannot read back from Markdown is marked and refused 
 		const file = markdownFile(directory, 'lossy')
 		assert.equal(
 			readFileSync(join(directory, file), 'utf8'),
-			'---\nid: "lossy"\ntitle: "L"\nlanguage: "en"\nversion: "v1"\neditable: false\n---\n# Edit chapters/chapter-lossy.en.json instead: this chapter contains textAlign, ruby, playScene, textStyle\n\nl',
+			'---\nid: "lossy"\ntitle: "L"\nlanguage: "en"\nversion: "v1"\neditable: false\n---\n# Edit chapters/chapter-lossy.en.json instead: this chapter contains textAlign, ruby, playSceneHeading, initialLetter, textStyle\n\nl',
 		)
 		assert.equal(localProjectStatus(directory)[0].source, 'none')
 		edit(

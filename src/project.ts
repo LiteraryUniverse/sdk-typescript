@@ -53,33 +53,43 @@ const digest = (content: JsonValue) =>
 	createHash('sha256').update(JSON.stringify(content)).digest('hex')
 const filename = (id: string, language: string) =>
 	`chapters/chapter-${id}.${language}.json`
-/** Node and mark types the server's Markdown has no form for; `play*` nodes and non-left alignment count too. */
+/**
+ * What the server's Markdown has no form for, so a `markdown` save is refused
+ * with MARKDOWN_UNSUPPORTED: node and mark types, plus the paragraph/heading
+ * attributes `textAlign` (other than left) and `initialLetter`.
+ */
 export const MARKDOWN_LOSSY_TYPES: readonly string[] = [
 	'ruby',
 	'connection',
 	'textStyle',
-	'initialLetter',
 	'emoji',
 	'video',
 	'workCard',
+	'textAlign',
+	'initialLetter',
+	'playSceneHeading',
+	'playCharacter',
+	'playParenthetical',
+	'playDialogue',
+	'playLyric',
+	'playTransition',
+	'playSynopsis',
+	'playNote',
+	'playBoneyard',
+	'playDialogueBlock',
+	'playDualDialogue',
 ]
+type Attributes = { textAlign?: unknown; initialLetter?: unknown }
+/** Lossy types found in a Tiptap document, in document order. */
 function lossyTypes(node: JsonValue, found = new Set<string>()) {
 	if (!node || typeof node !== 'object') return found
-	const { type, attrs } = node as {
-		type?: unknown
-		attrs?: { textAlign?: unknown }
-	}
-	if (
-		typeof type === 'string' &&
-		(MARKDOWN_LOSSY_TYPES.includes(type) || type.startsWith('play'))
-	)
+	const { type, attrs } = node as { type?: unknown; attrs?: Attributes }
+	if (typeof type === 'string' && MARKDOWN_LOSSY_TYPES.includes(type))
 		found.add(type)
-	if (
-		(type === 'paragraph' || type === 'heading') &&
-		attrs?.textAlign &&
-		attrs.textAlign !== 'left'
-	)
+	const block = type === 'paragraph' || type === 'heading'
+	if (block && attrs?.textAlign != null && attrs.textAlign !== 'left')
 		found.add('textAlign')
+	if (block && attrs?.initialLetter) found.add('initialLetter')
 	for (const value of Object.values(node)) lossyTypes(value, found)
 	return found
 }
