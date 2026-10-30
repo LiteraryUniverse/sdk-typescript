@@ -338,7 +338,9 @@ The Markdown file starts with YAML frontmatter (`id`, `title`, `language`,
 `version`, `editable`) followed by a blank line and the body; only the body is
 hashed and sent. A chapter whose content has no Markdown form gets
 `editable: false` and a `# Edit chapters/chapter-<id>.<lang>.json instead` line
-under the frontmatter. The manifest `.lu/project.json` stays at version 1;
+under the frontmatter; a legacy chapter the server has no Markdown form for yet
+(`content` and `markdown` null) gets `editable: false` and a line asking to open
+it once in the web editor and refresh. The manifest `.lu/project.json` stays at version 1;
 manifests without the `markdown` entry still load and gain the mirror on the
 next save.
 

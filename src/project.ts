@@ -93,17 +93,22 @@ function lossyTypes(node: JsonValue, found = new Set<string>()) {
 	for (const value of Object.values(node)) lossyTypes(value, found)
 	return found
 }
-const FRONTMATTER = /^---\n(?:[^\n]*\n)*?---\n(?:# Edit chapters\/[^\n]*\n)?\n?/
-function frontmatter(draft: Draft) {
+const FRONTMATTER = /^---\n(?:[^\n]*\n)*?---\n(?:# [^\n]*\n)?\n?/
+/** Why the Markdown file must not be edited, or undefined when it may be. */
+function markdownNotice(draft: Draft) {
+	if (draft.content == null || draft.markdown == null)
+		return '# This chapter has no Markdown form yet; open it once in the web editor to convert it, then run lu refresh'
 	const lossy = [...lossyTypes(draft.content)]
+	if (lossy.length)
+		return `# Edit ${filename(draft.id, draft.language)} instead: this chapter contains ${lossy.join(', ')}`
+}
+function frontmatter(draft: Draft) {
+	const notice = markdownNotice(draft)
 	const fields = ['id', 'title', 'language', 'version'].map(
 		(key) => `${key}: ${JSON.stringify(draft[key as keyof Draft])}`,
 	)
-	const notice = lossy.length
-		? `# Edit ${filename(draft.id, draft.language)} instead: this chapter contains ${lossy.join(', ')}\n`
-		: ''
-	const header = ['---', ...fields, `editable: ${!lossy.length}`, '---', '']
-	return `${header.join('\n')}${notice}\n`
+	const header = ['---', ...fields, `editable: ${!notice}`, '---', '']
+	return `${header.join('\n')}${notice ? `${notice}\n` : ''}\n`
 }
 const rootFor = (directory: string) => realpathSync(resolve(directory))
 
@@ -603,7 +608,9 @@ function snapshot(
 	const { content, body, source } = inspect(root, chapter)
 	if (source === 'none') return source
 	if (source === 'both') return 'AMBIGUOUS_CHANGE'
-	if (source === 'markdown' && lossyTypes(content).size)
+	// The stored server draft shows a missing Markdown form, which the JSON file alone cannot.
+	const stored = readJson(root, `.lu/${chapter.file.split('/')[1]}`)
+	if (source === 'markdown' && markdownNotice(stored as unknown as Draft))
 		return 'MARKDOWN_UNSUPPORTED'
 	const sent = source === 'markdown' ? { markdown: body } : { content }
 	const hash = digest(source === 'markdown' ? body : content)

@@ -298,6 +298,47 @@ test('a chapter the server cannot read back from Markdown is marked and refused 
 	}
 })
 
+test('a legacy chapter without a Markdown form is marked and never pushed from Markdown', async () => {
+	const { directory, client, sent } = await pulled([
+		draft('legacy', 1, 'Old', null, {
+			version: 'legacy',
+			content: null,
+			html: '<p>Old</p>',
+		}),
+	])
+	try {
+		const file = markdownFile(directory, 'legacy')
+		assert.equal(
+			readFileSync(join(directory, file), 'utf8'),
+			'---\nid: "legacy"\ntitle: "Old"\nlanguage: "en"\nversion: "legacy"\neditable: false\n---\n# This chapter has no Markdown form yet; open it once in the web editor to convert it, then run lu refresh\n\n',
+		)
+		assert.equal(
+			readFileSync(join(directory, 'chapters/chapter-legacy.en.json'), 'utf8'),
+			'null\n',
+		)
+		assert.deepEqual(
+			localProjectStatus(directory).map((entry) => [
+				entry.source,
+				entry.changed,
+			]),
+			[['none', false]],
+		)
+		edit(
+			directory,
+			file,
+			`${readFileSync(join(directory, file), 'utf8')}New text`,
+		)
+		assert.equal(localProjectStatus(directory)[0].source, 'markdown')
+		sent.length = 0
+		assert.deepEqual(await pushLocalProject(client, { directory, baseUrl }), [
+			{ id: 'legacy', status: 'failed', code: 'MARKDOWN_UNSUPPORTED' },
+		])
+		assert.equal(sent.length, 0)
+	} finally {
+		rmSync(directory, { recursive: true, force: true })
+	}
+})
+
 test('refresh refuses local changes, then rewrites, adds and removes chapters', async () => {
 	const drafts = [draft('a', 1, 'A', 'a'), draft('b', 2, 'B', 'b')]
 	const { directory, client } = await pulled(drafts)
