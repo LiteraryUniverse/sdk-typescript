@@ -311,7 +311,14 @@ input AuthorDraftSaveInput {
   language: Locale
   expectedVersion: String!
   operationId: ID!
-  content: JSON!
+
+  """Tiptap JSON. Provide exactly one of content and markdown."""
+  content: JSON
+
+  """
+  Markdown converted on the server with the editor's own Markdown extension. Provide exactly one of content and markdown. Rejected with MARKDOWN_UNSUPPORTED if the stored draft has nodes, marks or attributes Markdown cannot preserve; use content instead.
+  """
+  markdown: String
 }
 
 type AuthorContentWarning {
@@ -337,6 +344,7 @@ input AuthorChapterCreateInput {
   operationId: ID!
   title: String
   content: JSON
+  markdown: String
   isAIGenerated: Boolean
 }
 
