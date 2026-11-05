@@ -26,7 +26,7 @@ export type AuthorDraftSaveInput = {
   operationId: string | number;
   /** Tiptap JSON. Provide exactly one of content and markdown. */
   content?: JsonValue | null | undefined;
-  /** Markdown in the form the draft's markdown field returns. Converted on the server with the editor's own Markdown extension; content without a Markdown form round-trips only if its fenced form from a read is left intact. */
+  /** Markdown converted on the server with the editor's own Markdown extension. Provide exactly one of content and markdown. Rejected with MARKDOWN_UNSUPPORTED if the stored draft has nodes, marks or attributes Markdown cannot preserve; use content instead. */
   markdown?: string | null | undefined;
 };
 
