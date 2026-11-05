@@ -143,8 +143,7 @@ const stories: Record<string, Spec> = {
 	}),
 }
 
-const saveShape = {
-	language,
+const bodyShape = {
 	markdown: z
 		.string()
 		.optional()
@@ -152,6 +151,7 @@ const saveShape = {
 	content: json.optional(),
 	operationId,
 }
+const saveShape = { language, ...bodyShape }
 const storiesWrite: Record<string, Spec> = {
 	'save-chapter-draft': tool({
 		title: 'Save chapter draft',
@@ -177,10 +177,10 @@ const storiesWrite: Record<string, Spec> = {
 			storyId: id,
 			title: z.string().optional(),
 			isAIGenerated: z.boolean().optional(),
-			...saveShape,
+			...bodyShape,
 		},
 		annotations: CREATE,
-		run: (client, { content, language: _language, ...args }) =>
+		run: (client, { content, ...args }) =>
 			client.createChapter({
 				...args,
 				operationId: args.operationId ?? randomUUID(),
@@ -491,7 +491,15 @@ const images: Record<string, Spec> = {
 }
 
 const docsIndex = (base: string) => [
-	{ title: 'Help centre (open in a browser)', url: `${base}/feedback/help` },
+	{ title: 'About Literary Universe', url: `${base}/llms.txt` },
+	{
+		title: 'Help centre: every article, each linked as Markdown',
+		url: `${base}/feedback/help/llms.txt`,
+	},
+	{
+		title: 'Help centre: all articles in one file',
+		url: `${base}/feedback/help/llms-full.txt`,
+	},
 	{ title: 'A story for agents', url: `${base}/story/<slug>/llms.txt` },
 	{ title: 'A universe for agents', url: `${base}/universe/<slug>/llms.txt` },
 	{
@@ -503,13 +511,16 @@ const docsIndex = (base: string) => [
 		url: `${base}/workshop/universe/<slug>/encyclopedia/llms.txt`,
 	},
 ]
+/** llms.txt pages, the full help file and help articles as Markdown. */
+const DOCS_PATH =
+	/\/llms(?:-full)?\.txt$|^\/feedback\/help\/article\/[^/]+\.md$/
 async function fetchDocs(options: McpToolOptions, url: string) {
 	const base = new URL(options.docsBaseUrl ?? DOCS)
 	const target = new URL(url, base)
-	if (target.origin !== base.origin || !target.pathname.endsWith('/llms.txt'))
+	if (target.origin !== base.origin || !DOCS_PATH.test(target.pathname))
 		throw new LiteraryUniverseApiError(
 			'BAD_USER_INPUT',
-			`Only ${base.origin} llms.txt pages can be fetched`,
+			`Only ${base.origin} llms.txt pages and help articles can be fetched`,
 		)
 	const fetcher = options.fetch ?? globalThis.fetch
 	const response = await fetcher(target, {
@@ -583,7 +594,7 @@ const docs: Record<string, Spec> = {
 	'fetch-lu-docs': tool({
 		title: 'Fetch Literary Universe docs',
 		description:
-			'Read one llms.txt page of the Literary Universe site as text.',
+			'Read one llms.txt page or help article (.md) of the Literary Universe site as text.',
 		input: { url: z.string().describe('A URL from search-lu-docs') },
 		annotations: WEB,
 		docs: true,

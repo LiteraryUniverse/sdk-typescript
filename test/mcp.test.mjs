@@ -272,7 +272,7 @@ test('resources read a story and a draft, and refuse without login', async () =>
 	)
 })
 
-test('fetch-lu-docs reads only llms.txt pages of the docs origin', async () => {
+test('fetch-lu-docs reads only llms.txt pages and help articles of the docs origin', async () => {
 	const fetched = []
 	const { call } = await connect({
 		tools: ['docs'],
@@ -297,6 +297,11 @@ test('fetch-lu-docs reads only llms.txt pages of the docs origin', async () => {
 		/^BAD_USER_INPUT: Only https:\/\/docs.test llms.txt/,
 	)
 	assert.equal(fetched.length, 1)
+	const article = await call('fetch-lu-docs', {
+		url: '/feedback/help/article/abc.md',
+	})
+	assert.equal(article.isError, undefined)
+	assert.equal(fetched[1], 'https://docs.test/feedback/help/article/abc.md')
 	const html = await call('fetch-lu-docs', {
 		url: 'https://docs.test/feedback/help',
 	})
