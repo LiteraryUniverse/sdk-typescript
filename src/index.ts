@@ -754,36 +754,7 @@ export class LiteraryUniverseClient {
 				? Number(retryHeader)
 				: Math.max(0, Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000))
 			: undefined
-		const reader = response.body?.getReader()
-		let bytes = 0
-		const chunks: Uint8Array[] = []
-		if (reader) {
-			try {
-				while (true) {
-					const chunk = await reader.read()
-					if (chunk.done) break
-					bytes += chunk.value.byteLength
-					if (bytes > MAX_RESPONSE_BYTES) {
-						await reader.cancel()
-						throw new LiteraryUniverseApiError(
-							'PAYLOAD_TOO_LARGE',
-							'API response exceeds the read size limit',
-							headerId,
-							response.status,
-						)
-					}
-					chunks.push(chunk.value)
-				}
-			} finally {
-				reader.releaseLock()
-			}
-		}
-		const body = new Uint8Array(bytes)
-		let offset = 0
-		for (const chunk of chunks) {
-			body.set(chunk, offset)
-			offset += chunk.byteLength
-		}
+		const body = await readResponseBytes(response, headerId)
 		let envelope: Envelope | undefined
 		try {
 			envelope = JSON.parse(new TextDecoder().decode(body)) as Envelope
@@ -856,6 +827,48 @@ export class LiteraryUniverseClient {
 			)
 		return credential.token
 	}
+}
+
+const tooLarge = (response: Response, requestId?: string) =>
+	new LiteraryUniverseApiError(
+		'PAYLOAD_TOO_LARGE',
+		'API response exceeds the read size limit',
+		requestId,
+		response.status,
+	)
+
+/** Streams when the body has a reader; a polyfilled Response without one is read whole. */
+async function readResponseBytes(response: Response, requestId?: string) {
+	if (typeof response.body?.getReader !== 'function') {
+		const whole = new Uint8Array(await response.arrayBuffer())
+		if (whole.byteLength > MAX_RESPONSE_BYTES)
+			throw tooLarge(response, requestId)
+		return whole
+	}
+	const reader = response.body.getReader()
+	let bytes = 0
+	const chunks: Uint8Array[] = []
+	try {
+		while (true) {
+			const chunk = await reader.read()
+			if (chunk.done) break
+			bytes += chunk.value.byteLength
+			if (bytes > MAX_RESPONSE_BYTES) {
+				await reader.cancel()
+				throw tooLarge(response, requestId)
+			}
+			chunks.push(chunk.value)
+		}
+	} finally {
+		reader.releaseLock()
+	}
+	const body = new Uint8Array(bytes)
+	let offset = 0
+	for (const chunk of chunks) {
+		body.set(chunk, offset)
+		offset += chunk.byteLength
+	}
+	return body
 }
 
 /** REST routes answer `{ error }`; a JSON 404 there is a missing resource, not a wrong mount. */

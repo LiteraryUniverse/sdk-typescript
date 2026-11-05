@@ -17,7 +17,7 @@ Test through public methods and packed consumers. Include relevant scope,
 resource, concurrency and lost-response cases for writes. Never include real
 keys, user manuscripts or private settings in fixtures, documentation or reports.
 
-The standalone package workflow checks Node 24 and Bun on Linux, Windows,
+The standalone package workflow checks Node 26 and Bun on Linux, Windows,
 macOS on Apple Silicon, and macOS on Intel. The monorepo also checks Node 22
 on Windows/Apple Silicon and Node 22/26 on Linux. Image preparation and
 cancellation must work in both ESM and CommonJS packages, including installation

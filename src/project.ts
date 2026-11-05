@@ -3,6 +3,7 @@ import {
 	existsSync,
 	lstatSync,
 	mkdirSync,
+	mkdtempSync,
 	readFileSync,
 	realpathSync,
 	renameSync,
@@ -18,25 +19,34 @@ import {
 } from './index.js'
 import type { JsonValue } from './json.js'
 
+type Draft = Awaited<ReturnType<LiteraryUniverseClient['draft']>>
+type Pending = {
+	operationId: string
+	expectedVersion: string
+	/** Digest of the form sent: `content`, or the Markdown body. */
+	hash: string
+	content?: JsonValue
+	markdown?: string
+}
 type ChapterFile = {
 	id: string
 	language: string
 	file: string
 	version: string
 	hash: string
-	pending?: {
-		operationId: string
-		expectedVersion: string
-		hash: string
-		content: JsonValue
-	}
+	/** The Markdown mirror; absent in projects pulled before it existed. */
+	markdown?: { file: string; hash: string }
+	pending?: Pending
 }
 export type LocalProject = {
 	version: 1
 	baseUrl: string
 	storyId: string
+	/** The language filter the project was pulled with. */
+	language?: string
 	chapters: ChapterFile[]
 }
+export type ChangeSource = 'none' | 'json' | 'markdown' | 'both'
 const failure = (code: string, message: string): never => {
 	throw new LiteraryUniverseApiError(code, message)
 }
@@ -44,6 +54,65 @@ const digest = (content: JsonValue) =>
 	createHash('sha256').update(JSON.stringify(content)).digest('hex')
 const filename = (id: string, language: string) =>
 	`chapters/chapter-${id}.${language}.json`
+/**
+ * What the server's Markdown has no form for, so a `markdown` save is refused
+ * with MARKDOWN_UNSUPPORTED: node and mark types, plus the paragraph/heading
+ * attributes `textAlign` (other than left) and `initialLetter`.
+ */
+export const MARKDOWN_LOSSY_TYPES: readonly string[] = [
+	'ruby',
+	'connection',
+	'textStyle',
+	'emoji',
+	'video',
+	'workCard',
+	'textAlign',
+	'initialLetter',
+	'playSceneHeading',
+	'playCharacter',
+	'playParenthetical',
+	'playDialogue',
+	'playLyric',
+	'playTransition',
+	'playSynopsis',
+	'playNote',
+	'playBoneyard',
+	'playDialogueBlock',
+	'playDualDialogue',
+]
+type Attributes = { textAlign?: unknown; initialLetter?: unknown }
+/** Lossy types found in a Tiptap document, in document order. */
+function lossyTypes(node: JsonValue, found = new Set<string>()) {
+	if (!node || typeof node !== 'object') return found
+	const { type, attrs } = node as { type?: unknown; attrs?: Attributes }
+	if (typeof type === 'string' && MARKDOWN_LOSSY_TYPES.includes(type))
+		found.add(type)
+	const block = type === 'paragraph' || type === 'heading'
+	if (block && attrs?.textAlign != null && attrs.textAlign !== 'left')
+		found.add('textAlign')
+	if (block && attrs?.initialLetter) found.add('initialLetter')
+	for (const value of Object.values(node)) lossyTypes(value, found)
+	return found
+}
+const FRONTMATTER = /^---\n(?:[^\n]*\n)*?---\n/
+const MARKDOWN_NOTICE =
+	/^# (?:This chapter has no Markdown form yet;[^\n]*|Edit chapters\/[^\n]* instead: this chapter contains [^\n]*)\n/
+/** Why the Markdown file must not be edited, or undefined when it may be. */
+function markdownNotice(draft: Draft) {
+	if (draft.content == null || draft.markdown == null)
+		return '# This chapter has no Markdown form yet; open it once in the web editor to convert it, then run lu refresh'
+	const lossy = [...lossyTypes(draft.content)]
+	if (lossy.length)
+		return `# Edit ${filename(draft.id, draft.language)} instead: this chapter contains ${lossy.join(', ')}`
+}
+function frontmatter(draft: Draft) {
+	const notice = markdownNotice(draft)
+	const fields = ['id', 'title', 'language', 'version'].map(
+		(key) => `${key}: ${JSON.stringify(draft[key as keyof Draft])}`,
+	)
+	const header = ['---', ...fields, `editable: ${!notice}`, '---', '']
+	return `${header.join('\n')}${notice ? `${notice}\n` : ''}\n`
+}
 const rootFor = (directory: string) => realpathSync(resolve(directory))
 
 function pathFor(root: string, file: string) {
@@ -62,32 +131,43 @@ function pathFor(root: string, file: string) {
 	return path
 }
 
-function writeJson(root: string, file: string, value: unknown) {
+function writeText(root: string, file: string, text: string) {
 	const path = pathFor(root, file)
 	const temporary = `${path}.${randomUUID()}.tmp`
-	writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, {
-		mode: 0o600,
-		flag: 'wx',
-	})
+	writeFileSync(temporary, text, { mode: 0o600, flag: 'wx' })
 	try {
 		renameSync(temporary, path)
 	} finally {
 		rmSync(temporary, { force: true })
 	}
 }
+const writeJson = (root: string, file: string, value: unknown) =>
+	writeText(root, file, `${JSON.stringify(value, null, 2)}\n`)
+const writeMarkdown = (root: string, file: string, draft: Draft) =>
+	writeText(root, file, frontmatter(draft) + (draft.markdown ?? ''))
 
-function readJson(root: string, file: string): JsonValue {
+function readText(root: string, file: string) {
 	const path = pathFor(root, file)
 	if (statSync(path).size > 16 * 1024 * 1024)
 		failure('PAYLOAD_TOO_LARGE', 'Project file exceeds the size limit')
+	return readFileSync(path, 'utf8').replace(/^\uFEFF/, '')
+}
+
+function readJson(root: string, file: string): JsonValue {
 	try {
-		return JSON.parse(
-			readFileSync(path, 'utf8').replace(/^\uFEFF/, ''),
-		) as JsonValue
+		return JSON.parse(readText(root, file)) as JsonValue
 	} catch {
 		return failure('INVALID_PROJECT', 'Project file contains invalid JSON')
 	}
 }
+
+/** The Markdown body: the file without its frontmatter, with LF line ends. */
+const readBody = (root: string, file: string) =>
+	readText(root, file)
+		.replaceAll('\r\n', '\n')
+		.replace(FRONTMATTER, '')
+		.replace(MARKDOWN_NOTICE, '')
+		.replace(/^\n/, '')
 
 function clearDeadLock(root: string) {
 	const existing = readJson(root, '.lu/lock') as {
@@ -134,6 +214,8 @@ export function readLocalProject(directory: string): LocalProject {
 		project?.version !== 1 ||
 		typeof project.baseUrl !== 'string' ||
 		!/^[a-zA-Z0-9_-]{1,100}$/.test(project.storyId) ||
+		(project.language !== undefined &&
+			!/^[a-zA-Z0-9-]{1,32}$/.test(project.language)) ||
 		!Array.isArray(project.chapters)
 	)
 		failure('INVALID_PROJECT', 'Invalid project manifest')
@@ -141,8 +223,23 @@ export function readLocalProject(directory: string): LocalProject {
 	for (const chapter of project.chapters) {
 		validateChapter(chapter, files)
 		files.add(chapter.file.toLowerCase())
+		if (chapter.markdown) validateMarkdown(chapter.markdown, files)
 	}
 	return project
+}
+
+function validateMarkdown(
+	markdown: NonNullable<ChapterFile['markdown']>,
+	files: Set<string>,
+) {
+	if (
+		typeof markdown.file !== 'string' ||
+		!/^chapters\/[a-zA-Z0-9._-]+\.md$/.test(markdown.file) ||
+		typeof markdown.hash !== 'string' ||
+		files.has(markdown.file.toLowerCase())
+	)
+		failure('INVALID_PROJECT', 'Invalid chapter manifest')
+	files.add(markdown.file.toLowerCase())
 }
 
 function validateChapter(chapter: ChapterFile, files: Set<string>) {
@@ -160,16 +257,32 @@ function validateChapter(chapter: ChapterFile, files: Set<string>) {
 		failure('INVALID_PROJECT', 'Invalid chapter manifest')
 }
 
+/** Which local file differs from the manifest; `both` cannot be pushed. */
+function inspect(root: string, chapter: ChapterFile) {
+	const content = readJson(root, chapter.file)
+	const body = chapter.markdown ? readBody(root, chapter.markdown.file) : ''
+	const json = digest(content) !== chapter.hash
+	const markdown =
+		chapter.markdown !== undefined && digest(body) !== chapter.markdown.hash
+	const source: ChangeSource =
+		json && markdown ? 'both' : json ? 'json' : markdown ? 'markdown' : 'none'
+	return { content, body, source }
+}
+
 export function localProjectStatus(directory: string) {
 	const root = rootFor(directory)
-	return readLocalProject(root).chapters.map((chapter) => ({
-		id: chapter.id,
-		language: chapter.language,
-		file: chapter.file,
-		version: chapter.version,
-		changed: digest(readJson(root, chapter.file)) !== chapter.hash,
-		pending: Boolean(chapter.pending),
-	}))
+	return readLocalProject(root).chapters.map((chapter) => {
+		const { source } = inspect(root, chapter)
+		return {
+			id: chapter.id,
+			language: chapter.language,
+			file: chapter.file,
+			version: chapter.version,
+			changed: source !== 'none',
+			source,
+			pending: Boolean(chapter.pending),
+		}
+	})
 }
 
 function initializeProject(directory: string) {
@@ -203,6 +316,8 @@ async function pullPage(
 			language: input.language,
 		})
 		storePulledDraft(root, project, draft)
+		// A refresh stopped midway keeps a manifest that matches the files written so far.
+		writeJson(root, '.lu/project.json', project)
 	}
 	return page.pageInfo
 }
@@ -218,14 +333,30 @@ function assertDistinctFile(project: LocalProject, file: string) {
 			'Chapter filenames differ only by case; use individual draft files',
 		)
 }
-function storePulledDraft(
-	root: string,
-	project: LocalProject,
-	draft: Awaited<ReturnType<LiteraryUniverseClient['draft']>>,
-) {
+/** `chapters/<seq>-<slug>.<lang>.md`, numbered on a collision. */
+function markdownName(project: LocalProject, draft: Draft) {
+	const slug =
+		draft.title
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.slice(0, 60)
+			.replace(/^-+|-+$/g, '') || 'chapter'
+	const base = `chapters/${String(draft.sequence).padStart(3, '0')}-${slug}`
+	const taken = new Set(
+		project.chapters.map((chapter) => chapter.markdown?.file.toLowerCase()),
+	)
+	for (let n = 1; ; n++) {
+		const file = `${base}${n > 1 ? `-${n}` : ''}.${draft.language}.md`
+		if (!taken.has(file.toLowerCase())) return file
+	}
+}
+
+function storePulledDraft(root: string, project: LocalProject, draft: Draft) {
 	const file = filename(draft.id, draft.language)
 	assertDistinctFile(project, file)
+	const markdown = markdownName(project, draft)
 	writeJson(root, file, draft.content)
+	writeMarkdown(root, markdown, draft)
 	writeJson(root, `.lu/${file.split('/')[1]}`, draft)
 	project.chapters.push({
 		id: draft.id,
@@ -233,6 +364,7 @@ function storePulledDraft(
 		file,
 		version: draft.version,
 		hash: digest(draft.content),
+		markdown: { file: markdown, hash: digest(draft.markdown ?? '') },
 	})
 }
 
@@ -264,8 +396,11 @@ export async function pullLocalProject(
 		baseUrl: string
 		storyId: string
 		language?: string
+		/** Re-pull an existing project instead; see refreshLocalProject. */
+		refresh?: boolean
 	},
 ) {
+	if (input.refresh) return refreshLocalProject(client, input)
 	const root = initializeProject(input.directory)
 	const release = lock(root)
 	try {
@@ -273,6 +408,7 @@ export async function pullLocalProject(
 			version: 1,
 			baseUrl: input.baseUrl,
 			storyId: input.storyId,
+			...(input.language ? { language: input.language } : {}),
 			chapters: [],
 		}
 		await pullPages(client, root, project, input.language)
@@ -283,6 +419,102 @@ export async function pullLocalProject(
 		for (const name of ['.lu', 'chapters'])
 			rmSync(join(root, name), { recursive: true, force: true })
 		throw error
+	} finally {
+		release()
+	}
+}
+
+/** Deletes the files of chapters the server no longer has and reports the difference. */
+function reconcile(
+	root: string,
+	previous: ChapterFile[],
+	project: LocalProject,
+) {
+	const current = new Set(project.chapters.map((chapter) => chapter.file))
+	const kept = new Set(
+		project.chapters.flatMap((chapter) => [
+			chapter.file,
+			chapter.markdown?.file,
+		]),
+	)
+	for (const chapter of previous) {
+		for (const file of [chapter.file, chapter.markdown?.file])
+			if (file && !kept.has(file)) rmSync(pathFor(root, file), { force: true })
+		if (!current.has(chapter.file))
+			rmSync(pathFor(root, `.lu/${chapter.file.split('/')[1]}`), {
+				force: true,
+			})
+	}
+	return difference(previous, project.chapters)
+}
+
+const sameState = (before: ChapterFile, after: ChapterFile) =>
+	before.version === after.version &&
+	before.hash === after.hash &&
+	before.markdown?.hash === after.markdown?.hash
+function difference(previous: ChapterFile[], chapters: ChapterFile[]) {
+	const was = new Map(previous.map((chapter) => [chapter.file, chapter]))
+	const current = new Set(chapters.map((chapter) => chapter.file))
+	const ids = (list: ChapterFile[]) => [...new Set(list.map((c) => c.id))]
+	return {
+		added: ids(chapters.filter((chapter) => !was.has(chapter.file))),
+		updated: ids(
+			chapters.filter((chapter) => {
+				const before = was.get(chapter.file)
+				return before && !sameState(before, chapter)
+			}),
+		),
+		removed: ids(previous.filter((chapter) => !current.has(chapter.file))),
+	}
+}
+
+/** Re-pulls every chapter of an existing project; refuses while anything local is unpushed. */
+export async function refreshLocalProject(
+	client: LiteraryUniverseClient,
+	input: { directory: string; baseUrl: string },
+) {
+	const root = rootFor(input.directory)
+	const release = lock(root)
+	try {
+		const project = openProject(root, input.baseUrl)
+		if (
+			project.chapters.some(
+				(chapter) =>
+					chapter.pending || inspect(root, chapter).source !== 'none',
+			)
+		)
+			failure('LOCAL_CHANGES', 'Push or revert local changes before refreshing')
+		const previous = project.chapters
+		const staging = mkdtempSync(join(root, '.lu-refresh-'))
+		try {
+			initializeProject(staging)
+			project.chapters = []
+			await pullPages(client, staging, project, project.language)
+			// Editors do not share our lock. Check again after the network reads.
+			if (previous.some((chapter) => inspect(root, chapter).source !== 'none'))
+				failure('LOCAL_CHANGES', 'Local changes appeared while refreshing')
+			const managed = new Set(
+				previous.flatMap((chapter) => [
+					chapter.file,
+					chapter.markdown?.file,
+					`.lu/${chapter.file.split('/')[1]}`,
+				]),
+			)
+			const files = project.chapters.flatMap((chapter) => [
+				chapter.file,
+				...(chapter.markdown ? [chapter.markdown.file] : []),
+				`.lu/${chapter.file.split('/')[1]}`,
+			])
+			for (const file of files) {
+				if (existsSync(pathFor(root, file)) && !managed.has(file))
+					failure('LOCAL_CHANGES', 'Refresh would overwrite an unmanaged file')
+			}
+			for (const file of files) writeText(root, file, readText(staging, file))
+			writeJson(root, '.lu/project.json', project)
+			return reconcile(root, previous, project)
+		} finally {
+			rmSync(staging, { recursive: true, force: true })
+		}
 	} finally {
 		release()
 	}
@@ -310,14 +542,23 @@ type PushResult = {
 	warnings?: unknown
 }
 
+/** Rewrites both files from the server's draft unless they changed again meanwhile. */
 function savedLocally(
 	root: string,
 	project: LocalProject,
 	chapter: ChapterFile,
 	result: Awaited<ReturnType<LiteraryUniverseClient['saveDraft']>>,
 ) {
-	if (digest(readJson(root, chapter.file)) === chapter.pending?.hash)
+	const { pending, markdown } = chapter
+	const sentMarkdown = pending?.markdown !== undefined
+	const jsonBefore = sentMarkdown ? chapter.hash : pending?.hash
+	if (digest(readJson(root, chapter.file)) === jsonBefore)
 		writeJson(root, chapter.file, result.draft.content)
+	const file = markdown?.file ?? markdownName(project, result.draft)
+	const bodyBefore = sentMarkdown ? pending?.hash : markdown?.hash
+	if (!markdown || digest(readBody(root, file)) === bodyBefore)
+		writeMarkdown(root, file, result.draft)
+	chapter.markdown = { file, hash: digest(result.draft.markdown ?? '') }
 	chapter.hash = digest(result.draft.content)
 	chapter.version = result.version
 	delete chapter.pending
@@ -380,27 +621,50 @@ async function pushChapter(
 	}
 }
 
-type PushChange = {
-	chapter: ChapterFile
-	pending: NonNullable<ChapterFile['pending']>
-}
+type PushChange = { chapter: ChapterFile; pending: Pending }
 const saveInput = ({ chapter, pending }: PushChange) => ({
 	id: chapter.id,
 	language: chapter.language,
 	expectedVersion: pending.expectedVersion,
 	operationId: pending.operationId,
-	content: pending.content,
+	...(pending.markdown === undefined
+		? { content: pending.content }
+		: { markdown: pending.markdown }),
 })
 
-function snapshot(root: string, chapter: ChapterFile): PushChange {
-	const content = chapter.pending?.content ?? readJson(root, chapter.file)
-	const pending = chapter.pending ?? {
-		operationId: randomUUID(),
+/** The intent to send: an earlier pending one, else the changed file's; or why nothing can be sent. */
+function snapshot(
+	root: string,
+	chapter: ChapterFile,
+): PushChange | 'none' | 'AMBIGUOUS_CHANGE' | 'MARKDOWN_UNSUPPORTED' {
+	if (chapter.pending) return { chapter, pending: chapter.pending }
+	const { content, body, source } = inspect(root, chapter)
+	if (source === 'none') return source
+	if (source === 'both') return 'AMBIGUOUS_CHANGE'
+	// The stored server draft shows a missing Markdown form, which the JSON file alone cannot.
+	const stored = readJson(root, `.lu/${chapter.file.split('/')[1]}`)
+	if (source === 'markdown' && markdownNotice(stored as unknown as Draft))
+		return 'MARKDOWN_UNSUPPORTED'
+	const sent = source === 'markdown' ? { markdown: body } : { content }
+	const hash = digest(source === 'markdown' ? body : content)
+	const operationId = randomUUID()
+	const pending = {
+		operationId,
 		expectedVersion: chapter.version,
-		hash: digest(content),
-		content,
+		hash,
+		...sent,
 	}
 	return { chapter, pending }
+}
+
+function openProject(root: string, baseUrl: string) {
+	const project = readLocalProject(root)
+	if (new URL(project.baseUrl).href !== new URL(baseUrl).href)
+		failure(
+			'DEPLOYMENT_MISMATCH',
+			'The selected deployment does not match this project',
+		)
+	return project
 }
 
 async function preflight(
@@ -408,21 +672,18 @@ async function preflight(
 	root: string,
 	baseUrl: string,
 ) {
-	const project = readLocalProject(root)
-	if (new URL(project.baseUrl).href !== new URL(baseUrl).href)
-		failure(
-			'DEPLOYMENT_MISMATCH',
-			'The selected deployment does not match this project',
-		)
-	const changes = project.chapters
-		.map((chapter) => snapshot(root, chapter))
-		.filter(
-			({ chapter, pending }) =>
-				chapter.pending || pending.hash !== chapter.hash,
-		)
+	const project = openProject(root, baseUrl)
+	const changes: PushChange[] = []
+	const unsendable: PushResult[] = []
+	for (const chapter of project.chapters) {
+		const change = snapshot(root, chapter)
+		if (typeof change === 'object') changes.push(change)
+		else if (change !== 'none')
+			unsendable.push({ id: chapter.id, status: 'failed', code: change })
+	}
 	for (const change of changes.filter(({ chapter }) => !chapter.pending))
 		await client.validateDraft(saveInput(change))
-	return { project, changes }
+	return { project, changes, unsendable }
 }
 
 async function pushLocked(
@@ -430,9 +691,13 @@ async function pushLocked(
 	root: string,
 	baseUrl: string,
 ) {
-	const { project, changes } = await preflight(client, root, baseUrl)
+	const { project, changes, unsendable } = await preflight(
+		client,
+		root,
+		baseUrl,
+	)
 	// Chapters are independent: a failure keeps its pending intent and the rest still push.
-	const results: PushResult[] = []
+	const results: PushResult[] = [...unsendable]
 	for (const change of changes)
 		results.push(await pushChapter(client, root, project, change))
 	return results
