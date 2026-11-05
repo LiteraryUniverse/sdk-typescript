@@ -10,29 +10,27 @@ Read the [documentation in our feedback knowledge base](https://literaryuniverse
 for Literary Universe help. This README describes the SDK's current API contract.
 Report SDK bugs in [this repository](https://github.com/LiteraryUniverse/sdk-typescript/issues).
 
-The client uses the deployment's `/graphql` endpoint. The core client has no runtime dependencies and exports ESM and CommonJS builds. Local image preparation uses the optional Sharp dependency through the `/images` entry point; `/project` manages a folder of chapter files, and `/mcp` registers the API as tools on an MCP server through the optional `@modelcontextprotocol/sdk` and `zod` peers. Node 22 or later and Bun are targets; see CI and local verification for tested versions. `/graphql` sends no CORS headers, so code running on another origin, including an Obsidian plugin, must pass a `fetch` that is not subject to CORS, for example one built on Obsidian's `requestUrl`.
+The client uses the deployment's `/graphql` endpoint. The core client has no runtime dependencies and exports ESM and CommonJS builds. Local image preparation uses the optional Sharp dependency through the `/images` entry point; `/project` manages a folder of chapter files, and `/mcp` registers the API as tools on an MCP server through the optional `@modelcontextprotocol/sdk` and `zod` peers. Node 26 or later and Bun are targets; see CI and local verification for tested versions. `/graphql` sends no CORS headers, so code running on another origin, including an Obsidian plugin, must pass a `fetch` that is not subject to CORS, for example one built on Obsidian's `requestUrl`.
 
 ## Install
 
-The source is MIT licensed. The package is still marked private and has not been
-released to npm. Build a tarball from this repository with Node 22 or later:
+The package is published to npm as
+[`@literary-universe/sdk`](https://www.npmjs.com/package/@literary-universe/sdk)
+under the MIT license. It needs Node 26 or later, or Bun:
 
 ```sh
-git clone https://github.com/LiteraryUniverse/sdk-typescript.git
-cd sdk-typescript
-npm ci
-npm pack
+npm install @literary-universe/sdk
+# or
+bun add @literary-universe/sdk
 ```
 
-Install that tarball in your application:
+The optional entry points need their own peers in your application:
+`npm install sharp@0.35.5` for `/images`, and
+`npm install @modelcontextprotocol/sdk zod` for `/mcp`.
 
-```sh
-npm install /path/to/sdk-typescript/literary-universe-sdk-0.1.0.tgz
-```
-
-The package includes its schema, generated types and image policy. Building or
-packing it does not require the Literary Universe monorepo. Git dependencies
-also build through the package's `prepare` script.
+The package includes its schema, generated types and image policy. To build it
+from source instead, clone this repository and run `npm ci && npm pack`; that
+does not require the Literary Universe monorepo.
 
 ## Quickstart
 
@@ -479,7 +477,7 @@ Tools are grouped in categories; `tools` selects categories and/or tool names
 `remove-chapter`), `publish` (`publish-chapter`, which does nothing without
 `confirm: true`), `universes`, `universes-write`, `images` (`set-cover` only with
 `readLocalFile`) and `docs` (`search-lu-docs`, `fetch-lu-docs`, usable without
-login; they read the site's `llms.txt` pages under `docsBaseUrl`). `selectTools`
+login; they read the site's `llms.txt` pages and help articles under `docsBaseUrl`). `selectTools`
 validates a selection without a server. Every tool carries a title, a zod input
 schema and the four MCP annotations; results carry `structuredContent` and a
 text form; API errors come back as `isError` text `CODE: message (request id)`,
