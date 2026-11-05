@@ -1,10 +1,10 @@
 {
   "name": "@literary-universe/sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Literary Universe authoring API client for Node and Bun",
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "main": "./dist/cjs/index.js",
   "types": "./dist/cjs/index.d.ts",
@@ -58,7 +58,7 @@
   },
   "devDependencies": {
     "@graphql-codegen/typescript-operations": "6.2.0",
-    "@types/node": "24.19.2",
+    "@types/node": "26.6.6",
     "graphql": "16.14.2",
     "sharp": "0.35.5",
     "typescript": "5.9.3"
