@@ -1,4 +1,5 @@
 import {
+	type AuthorBlogMutationInput,
 	type AuthorChapterCreateInput,
 	type AuthorChapterPublishInput,
 	type AuthorChapterRemoveInput,
@@ -8,6 +9,12 @@ import {
 	type AuthorEncyclopediaEntryCreateInput,
 	type AuthorEncyclopediaEntryTranslationInput,
 	type AuthorSeriesSaveInput,
+	LuBlogMenusDocument,
+	type LuBlogMenusQuery,
+	type LuBlogMenusQueryVariables,
+	LuBlogPagesDocument,
+	type LuBlogPagesQuery,
+	type LuBlogPagesQueryVariables,
 	LuChaptersDocument,
 	type LuChaptersQuery,
 	type LuChaptersQueryVariables,
@@ -37,6 +44,8 @@ import {
 	type LuIdentityQuery,
 	LuImagePolicyDocument,
 	type LuImagePolicyQuery,
+	LuMutateBlogDocument,
+	type LuMutateBlogMutation,
 	LuProfileDocument,
 	type LuProfileQuery,
 	LuPublishChapterDocument,
@@ -501,6 +510,33 @@ export class LiteraryUniverseClient {
 		return this.read<LuSaveDraftMutation>(
 			LuSaveDraftDocument,
 			'LuSaveDraft',
+			{ input },
+			options,
+		)
+	}
+
+	blogPages(input: LuBlogPagesQueryVariables, options?: RequestOptions) {
+		return this.read<LuBlogPagesQuery>(
+			LuBlogPagesDocument,
+			'LuBlogPages',
+			input,
+			options,
+		)
+	}
+
+	blogMenus(input: LuBlogMenusQueryVariables, options?: RequestOptions) {
+		return this.read<LuBlogMenusQuery>(
+			LuBlogMenusDocument,
+			'LuBlogMenus',
+			input,
+			options,
+		)
+	}
+
+	mutateBlog(input: AuthorBlogMutationInput, options?: RequestOptions) {
+		return this.read<LuMutateBlogMutation>(
+			LuMutateBlogDocument,
+			'LuMutateBlog',
 			{ input },
 			options,
 		)
