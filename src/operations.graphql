@@ -147,3 +147,13 @@ mutation LuSaveSeries($input: AuthorSeriesSaveInput!) {
 }
 
 query LuImagePolicy { result: authorImagePolicy }
+
+query LuBlogPages($blogId: ID!, $first: Int, $after: ID) {
+  result: authorBlogPages(blogId: $blogId, first: $first, after: $after) { id version data }
+}
+query LuBlogMenus($blogId: ID!) {
+  result: authorBlogMenus(blogId: $blogId) { id version data }
+}
+mutation LuMutateBlog($input: AuthorBlogMutationInput!) {
+  result: mutateAuthorBlog(input: $input) { id version data }
+}

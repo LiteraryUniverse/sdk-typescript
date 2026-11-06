@@ -169,6 +169,21 @@ export type AuthorStoryUpdateInput = {
   universeId?: string | number | null | undefined;
 };
 
+export type AuthorBlogMutationInput = {
+  blogId: string | number;
+  operationId: string;
+  expectedVersion?: string | null | undefined;
+  action: string;
+  pageId?: string | number | null | undefined;
+  location?: string | null | undefined;
+  language?: string | null | undefined;
+  page?: JsonValue | null | undefined;
+  published?: boolean | null | undefined;
+  items?: Array<JsonValue> | null | undefined;
+  settings?: JsonValue | null | undefined;
+  entries?: JsonValue | null | undefined;
+};
+
 export type LuIdentityQueryVariables = Exact<{ [key: string]: never; }>;
 
 
@@ -400,6 +415,29 @@ export type LuImagePolicyQueryVariables = Exact<{ [key: string]: never; }>;
 
 export type LuImagePolicyQuery = { result: JsonValue };
 
+export type LuBlogPagesQueryVariables = Exact<{
+  blogId: string | number;
+  first?: number | null | undefined;
+  after?: string | number | null | undefined;
+}>;
+
+
+export type LuBlogPagesQuery = { result: Array<{ id: string, version: string, data: JsonValue }> };
+
+export type LuBlogMenusQueryVariables = Exact<{
+  blogId: string | number;
+}>;
+
+
+export type LuBlogMenusQuery = { result: Array<{ id: string, version: string, data: JsonValue }> };
+
+export type LuMutateBlogMutationVariables = Exact<{
+  input: AuthorBlogMutationInput;
+}>;
+
+
+export type LuMutateBlogMutation = { result: { id: string, version: string, data: JsonValue } };
+
 export const LuIdentityDocument = "query LuIdentity {\n  result: apiIdentity {\n    version\n    kind\n    userId\n    organizationId\n    credentialId\n    scopes\n    expiresAt\n    resourceRestrictions {\n      universeIds\n      storyIds\n    }\n    deploymentUrl\n    environment\n    limits {\n      defaultPageSize\n      maxPageSize\n      maxRequestBytes\n      maxDraftBytes\n      maxResponseBytes\n    }\n  }\n}" as const
 export const LuProfileDocument = "query LuProfile {\n  result: apiIdentity {\n    userId\n    username\n  }\n}" as const
 export const LuStoriesDocument = "query LuStories($first: Int, $after: String) {\n  result: authorStories(first: $first, after: $after) {\n    nodes {\n      id\n      title\n      slug\n      language\n      universeId\n      organizationId\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n      state\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
@@ -431,3 +469,6 @@ export const LuDeleteEncyclopediaEntryDocument = "mutation LuDeleteEncyclopediaE
 export const LuSeriesDocument = "query LuSeries($universeId: ID!) {\n  result: authorSeries(universeId: $universeId) {\n    id\n    universeId\n    title\n    version\n    storyIds\n    updatedAt\n  }\n}" as const
 export const LuSaveSeriesDocument = "mutation LuSaveSeries($input: AuthorSeriesSaveInput!) {\n  result: saveAuthorSeries(input: $input) {\n    id\n    universeId\n    title\n    version\n    storyIds\n    updatedAt\n  }\n}" as const
 export const LuImagePolicyDocument = "query LuImagePolicy {\n  result: authorImagePolicy\n}" as const
+export const LuBlogPagesDocument = "query LuBlogPages($blogId: ID!, $first: Int, $after: ID) {\n  result: authorBlogPages(blogId: $blogId, first: $first, after: $after) {\n    id\n    version\n    data\n  }\n}" as const
+export const LuBlogMenusDocument = "query LuBlogMenus($blogId: ID!) {\n  result: authorBlogMenus(blogId: $blogId) {\n    id\n    version\n    data\n  }\n}" as const
+export const LuMutateBlogDocument = "mutation LuMutateBlog($input: AuthorBlogMutationInput!) {\n  result: mutateAuthorBlog(input: $input) {\n    id\n    version\n    data\n  }\n}" as const

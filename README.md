@@ -483,3 +483,35 @@ schema and the four MCP annotations; results carry `structuredContent` and a
 text form; API errors come back as `isError` text `CODE: message (request id)`,
 with the input schema appended for BAD_USER_INPUT. Resources `lu://story/{id}`
 and `lu://chapter/{id}/draft` return the same data as the tools.
+
+## Blog pages and menus
+
+`client.blogPages({blogId, first?, after?})` lists private pages, including drafts
+and translations, sorted by ID. Use the last returned ID as `after` and stop on a
+short or empty batch. `client.blogMenus({blogId})` returns the three stored menu
+locations. Both return documents with `id`, opaque `version`, and JSON `data`.
+They require `blog:read` and management access to that blog.
+
+`client.mutateBlog(input)` requires `blog:write`. Its `action` is `savePage`,
+`translatePage`, `publishPage`, `saveMenu` or `translateMenu`. Supply `blogId`,
+`operationId` and `expectedVersion` on every request. Use null for a new page or
+menu and the latest returned version for edits. Keep the full request unchanged
+when retrying a lost response; the SDK preserves it on transport retries.
+Organization keys may manage only their own enabled organization blog. Restricted
+story/universe keys cannot access blogs. The deployment's author write rollout
+must also permit writes.
+
+```ts
+const page = await client.mutateBlog({
+  blogId: 'BLOG_ID', action: 'savePage', operationId: 'author-page-1',
+  expectedVersion: null, page: {title: 'Author', slug: 'author', language: 'en'},
+})
+await client.mutateBlog({
+  blogId: 'BLOG_ID', action: 'publishPage', pageId: page.id,
+  operationId: 'author-publish-1', expectedVersion: page.version, published: true,
+})
+```
+
+Edits to published pages and saved menus are live immediately. A stale version
+fails with `VERSION_CONFLICT`; read again and review the changes. System pages,
+deletions, unpublishing and homepage changes remain web-editor actions.

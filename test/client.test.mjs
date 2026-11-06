@@ -828,3 +828,45 @@ test('reads a polyfilled Response that has no body stream and still enforces the
 			error.code === 'PAYLOAD_TOO_LARGE' && error.requestId === 'polyfill',
 	)
 })
+
+test('blog readback preserves versions and mutation retries preserve the full request', async () => {
+	const requests = []
+	const document = { id: 'page', version: 'after', data: { title: 'Author' } }
+	const client = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		maxRetries: 1,
+		fetch: async (_url, options) => {
+			const request = JSON.parse(options.body)
+			requests.push(request)
+			if (request.operationName === 'LuMutateBlog' && requests.length === 3)
+				throw new Error('lost response')
+			return Response.json({
+				data: {
+					result:
+						request.operationName === 'LuMutateBlog' ? document : [document],
+				},
+			})
+		},
+	})
+	assert.deepEqual(
+		await client.blogPages({ blogId: 'blog', first: 10, after: 'cursor' }),
+		[document],
+	)
+	assert.deepEqual(requests[0].variables, {
+		blogId: 'blog',
+		first: 10,
+		after: 'cursor',
+	})
+	assert.deepEqual(await client.blogMenus({ blogId: 'blog' }), [document])
+	const input = {
+		blogId: 'blog',
+		action: 'savePage',
+		operationId: 'once',
+		expectedVersion: null,
+		page: { title: 'Author', slug: 'author' },
+	}
+	assert.deepEqual(await client.mutateBlog(input), document)
+	assert.deepEqual(requests[2], requests[3])
+	assert.deepEqual(requests[3].variables, { input })
+})
