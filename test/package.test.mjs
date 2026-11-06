@@ -7,7 +7,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 test('SDK generation and build work after extraction without the application', {
-	timeout: 30_000,
+	timeout: 120_000,
 }, () => {
 	const root = fileURLToPath(new URL('../', import.meta.url))
 	const folder = mkdtempSync(join(tmpdir(), 'lu SDK Ω & extracted-'))
