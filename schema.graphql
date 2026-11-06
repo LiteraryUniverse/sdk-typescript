@@ -79,6 +79,8 @@ type Query {
 
   """The saved series of a universe."""
   authorSeries(universeId: ID!): [AuthorSeries!]!
+  authorBlogPages(blogId: ID!, first: Int = 25, after: ID): [AuthorBlogDocument!]!
+  authorBlogMenus(blogId: ID!): [AuthorBlogDocument!]!
 }
 
 enum AuthorWorkState {
@@ -269,6 +271,7 @@ type Mutation {
   credential cannot use, and FAILED_PRECONDITION for a rating under review.
   """
   updateAuthorStory(storyId: ID!, input: AuthorStoryUpdateInput!): AuthorStoryHeader!
+  mutateAuthorBlog(input: AuthorBlogMutationInput!): AuthorBlogDocument!
 }
 
 type AuthorChapterHeader {
@@ -606,6 +609,30 @@ input AuthorStoryUpdateInput {
   Another universe needs edit rights on it; null makes the story standalone.
   """
   universeId: ID
+}
+
+"""
+Private stored page/menu data including translations, plus an opaque concurrency token.
+"""
+type AuthorBlogDocument {
+  id: ID!
+  version: String!
+  data: JSON!
+}
+
+input AuthorBlogMutationInput {
+  blogId: ID!
+  operationId: String!
+  expectedVersion: String
+  action: String!
+  pageId: ID
+  location: String
+  language: Locale
+  page: JSON
+  published: Boolean
+  items: [JSON!]
+  settings: JSON
+  entries: JSON
 }
 
 scalar Date
