@@ -1,6 +1,6 @@
 {
   "name": "@literary-universe/sdk",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Literary Universe authoring API client for Node and Bun",
   "type": "module",
   "engines": {
