@@ -243,11 +243,11 @@ The version covers the whole chapter, including its translations. A translation
 body save can therefore conflict with an original-language edit. Title-only and
 settings-only edits do not advance it.
 
-The initial write ceiling is 900,000 serialized UTF-8 bytes. In deployed builds,
-set server settings authorApi.draftWritesEnabled to true. Optional
- authorApi.allowedUserIds limits rollout to selected accounts. Development builds
-allow it by default; setting draftWritesEnabled false disables it there too.
-Production publication also requires authorApi.publicationEnabled to be true.
+The write ceiling is 900,000 serialized UTF-8 bytes. Writing requires the key's
+write scope and the author's current permissions on the resource. Organization
+keys also require the organization's API feature and plan. Publication requires
+`story:publish` and the work's publication permission. No deployment settings or
+actor allowlist is required.
 
 ## Chapter lifecycle
 
@@ -417,7 +417,8 @@ decoders per server process. Body transfer has a twenty-second deadline; decodin
 has a killable ten-second deadline. Unavailable enforcement/storage fails closed.
 Transfer and intent leases renew while work is active; renewal calls are bounded
 to ten seconds and the final asset/result transaction to twenty-five seconds.
-Production uses the existing authorApi.draftWritesEnabled/allowedUserIds rollout.
+Uploads require the purpose's write scope and current resource permissions.
+Organization keys also require their organization's API feature and plan.
 
 Keep the prepared bytes and operation ID for retry. Changed input yields
 IDEMPOTENCY_CONFLICT; committed replay returns the original asset after current
