@@ -243,11 +243,11 @@ The version covers the whole chapter, including its translations. A translation
 body save can therefore conflict with an original-language edit. Title-only and
 settings-only edits do not advance it.
 
-The initial write ceiling is 900,000 serialized UTF-8 bytes. In deployed builds,
-set server settings authorApi.draftWritesEnabled to true. Optional
- authorApi.allowedUserIds limits rollout to selected accounts. Development builds
-allow it by default; setting draftWritesEnabled false disables it there too.
-Production publication also requires authorApi.publicationEnabled to be true.
+The write ceiling is 900,000 serialized UTF-8 bytes. Writing requires the key's
+write scope and the author's current permissions on the resource. Organization
+keys also require the organization's API feature and plan. Publication requires
+`story:publish` and the work's publication permission. No deployment settings or
+actor allowlist is required.
 
 ## Chapter lifecycle
 
@@ -417,7 +417,8 @@ decoders per server process. Body transfer has a twenty-second deadline; decodin
 has a killable ten-second deadline. Unavailable enforcement/storage fails closed.
 Transfer and intent leases renew while work is active; renewal calls are bounded
 to ten seconds and the final asset/result transaction to twenty-five seconds.
-Production uses the existing authorApi.draftWritesEnabled/allowedUserIds rollout.
+Uploads require the purpose's write scope and current resource permissions.
+Organization keys also require their organization's API feature and plan.
 
 Keep the prepared bytes and operation ID for retry. Changed input yields
 IDEMPOTENCY_CONFLICT; committed replay returns the original asset after current
@@ -431,7 +432,7 @@ collection. Storage remains public; protected comic/audio files use other contra
 For live image checks, configure an isolated local S3-compatible test endpoint in
 the test server's Backblaze settings, then run `node app/scripts/testApiImageContract.mjs` from the monorepo root with the same
 local _test database variables as test:integration. Real Backblaze verification
-remains a separate rollout check.
+remains a separate integration check.
 
 Platform CI runs the package checks on Windows and macOS, including both Intel
 and Apple Silicon Macs. These checks cover extracted builds, packed consumers,
@@ -498,8 +499,8 @@ They require `blog:read` and management access to that blog.
 menu and the latest returned version for edits. Keep the full request unchanged
 when retrying a lost response; the SDK preserves it on transport retries.
 Organization keys may manage only their own enabled organization blog. Restricted
-story/universe keys cannot access blogs. The deployment's author write rollout
-must also permit writes.
+story/universe keys cannot access blogs. Writes use these permissions without
+deployment settings or an actor allowlist.
 
 ```ts
 const page = await client.mutateBlog({
