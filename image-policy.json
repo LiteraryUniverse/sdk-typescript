@@ -5,6 +5,15 @@
   "maxUploadPixels": 16000000,
   "processingSeconds": 10,
   "purposes": {
+    "oauth-app-logo": {
+      "maxBytes": 2097152,
+      "allowedTypes": ["image/jpeg", "image/png", "image/webp"],
+      "maxWidth": 512,
+      "maxHeight": 512,
+      "aspectRatio": 1,
+      "recommendedWidth": 512,
+      "recommendedHeight": 512
+    },
     "story-cover": {
       "maxBytes": 5242880,
       "allowedTypes": ["image/jpeg", "image/png", "image/webp"],
