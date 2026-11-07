@@ -229,7 +229,7 @@ export class LiteraryUniverseClient {
 				? typeof options.credentials !== 'function' ||
 					options.token !== undefined
 				: typeof options.token !== 'string' ||
-					!/^lu_(?:live|dev|test)_[a-zA-Z0-9_-]+$/.test(options.token)
+					!/^[\x21-\x7e]+$/.test(options.token)
 		)
 			throw invalid()
 		this.endpoint = new URL(
@@ -855,7 +855,7 @@ export class LiteraryUniverseClient {
 		if (
 			credential?.kind !== 'api-key' ||
 			typeof credential.token !== 'string' ||
-			!/^lu_(?:live|dev|test)_[a-zA-Z0-9_-]+$/.test(credential.token)
+			!/^[\x21-\x7e]+$/.test(credential.token)
 		)
 			throw new LiteraryUniverseApiError(
 				'INVALID_CONFIGURATION',
