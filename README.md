@@ -432,7 +432,7 @@ collection. Storage remains public; protected comic/audio files use other contra
 For live image checks, configure an isolated local S3-compatible test endpoint in
 the test server's Backblaze settings, then run `node app/scripts/testApiImageContract.mjs` from the monorepo root with the same
 local _test database variables as test:integration. Real Backblaze verification
-remains a separate rollout check.
+remains a separate integration check.
 
 Platform CI runs the package checks on Windows and macOS, including both Intel
 and Apple Silicon Macs. These checks cover extracted builds, packed consumers,
@@ -499,8 +499,8 @@ They require `blog:read` and management access to that blog.
 menu and the latest returned version for edits. Keep the full request unchanged
 when retrying a lost response; the SDK preserves it on transport retries.
 Organization keys may manage only their own enabled organization blog. Restricted
-story/universe keys cannot access blogs. The deployment's author write rollout
-must also permit writes.
+story/universe keys cannot access blogs. Writes use these permissions without
+deployment settings or an actor allowlist.
 
 ```ts
 const page = await client.mutateBlog({
