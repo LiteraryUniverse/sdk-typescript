@@ -31,6 +31,7 @@ const results = {
 	LuStory: { id: 'story', title: 'A story' },
 	LuDraft: draft,
 	LuSaveDraft: { version: 'v2', recoveryId: 'r', warnings: [], draft },
+	LuCreateStory: { id: 'new-story', slug: 'my-story' },
 	LuPublishChapter: { id: 'chapter', version: 'v2', audience: 'READERS' },
 }
 
@@ -78,7 +79,7 @@ test('selectTools expands categories and names, dedupes, and rejects unknown ent
 	])
 	const all = selectTools(['all'])
 	assert.equal(all.length, Object.values(TOOL_CATEGORIES).flat().length)
-	assert.equal(all.length, 31)
+	assert.equal(all.length, 33)
 	assert.throws(() => selectTools(['nope']), {
 		code: 'INVALID_CONFIGURATION',
 		message: 'Unknown tool or category: nope',
@@ -92,7 +93,7 @@ test('every registered tool carries a title and all four annotation hints', asyn
 		readLocalFile: async () => new Uint8Array([1]),
 	})
 	const { tools } = await client.listTools()
-	assert.equal(tools.length, 31)
+	assert.equal(tools.length, 33)
 	assert.deepEqual(
 		tools.map((tool) => tool.name).sort(),
 		[...registered].sort(),
@@ -188,6 +189,27 @@ test('save-chapter-draft with markdown maps to the saveDraft mutation with a fre
 		warnings: [],
 	})
 	assert.equal(JSON.parse(saved.content[0].text).version, 'v2')
+})
+
+test('guided story creation requires the author choices before issuing a mutation', async () => {
+	const { call, sent } = await connect({ tools: ['creation'] })
+	const incomplete = await call('create-story', { title: 'My story' })
+	assert.equal(incomplete.isError, true)
+	assert.equal(sent.length, 0)
+	const input = {
+		title: 'My story',
+		slug: 'my-story',
+		description: 'Description',
+		language: 'en',
+		genres: ['fantasy'],
+		rating: 'teen',
+		license: 'cc-by',
+		isAIGenerated: false,
+	}
+	const created = await call('create-story', input)
+	assert.equal(sent[0].operationName, 'LuCreateStory')
+	assert.deepEqual(sent[0].variables.input, input)
+	assert.equal(created.structuredContent.id, 'new-story')
 })
 
 test('get-chapter-draft returns Markdown text by default and JSON content on request', async () => {

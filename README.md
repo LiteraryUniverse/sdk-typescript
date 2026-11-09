@@ -449,6 +449,22 @@ real S3 transport without contacting Backblaze. It is not a production server.
 
 ## MCP server
 
+`client.storyCreationOptions()` returns the deployment's current languages,
+genres, ratings and licenses. `client.createStory(input)` creates an unpublished
+personal story with explicit title, slug, description, language, genres, rating,
+license and `isAIGenerated`. AI-generated text also requires `aiModel`. Both
+require unrestricted personal `story:write` access; the verified-account and
+universe-placement rules match the workshop. Creation is not automatically
+retried: after a lost response, find the chosen slug before creating again.
+Use `createChapter` for supplied manuscript text, and `saveDraft` with the
+last-read version for explicit replacements. Chapter creation/save operation
+IDs must stay stable when retrying identical input. Publishing is separate.
+
+The optional `creation` MCP category exposes `get-story-creation-options` and
+`create-story`; select it explicitly alongside `stories` and `stories-write`
+for a guided creation/upload client. It needs a deployment with the corresponding
+GraphQL additions, rather than just a newer local SDK.
+
 `@literary-universe/sdk/mcp` registers the authoring API as tools on a
 `McpServer` from `@modelcontextprotocol/sdk` (install it and `zod` in the host;
 the core client does not load them). The CLI's `lu mcp` and the hosted

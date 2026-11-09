@@ -59,6 +59,8 @@ type ApiIdentity {
 }
 
 type Query {
+  authorStoryCreationOptions: AuthorStoryCreationOptions!
+
   """
   Deployment and this credential's grants. Does not enumerate other users or organizations.
   """
@@ -81,6 +83,125 @@ type Query {
   authorSeries(universeId: ID!): [AuthorSeries!]!
   authorBlogPages(blogId: ID!, first: Int = 25, after: ID): [AuthorBlogDocument!]!
   authorBlogMenus(blogId: ID!): [AuthorBlogDocument!]!
+}
+
+type AuthorCreationChoice {
+  value: String!
+  name: String!
+  description: String
+}
+
+type AuthorStoryCreationOptions {
+  languages: [String!]!
+  ratings: [String!]!
+  genres: [AuthorCreationChoice!]!
+  licenses: [AuthorCreationChoice!]!
+}
+
+input AuthorStoryCreateInput {
+  title: String!
+  slug: String!
+  description: String!
+  language: Locale!
+  genres: [String!]!
+  rating: String!
+  license: String!
+  isAIGenerated: Boolean!
+  aiModel: String
+  universeId: ID
+}
+
+type AuthorStoryCreated {
+  id: ID!
+  slug: String!
+}
+
+type Mutation {
+  createAuthorStory(input: AuthorStoryCreateInput!): AuthorStoryCreated!
+
+  """
+  Open a language for a universe. Title and description start as copies of the
+  original unless given. Also opens the language for the universe's
+  encyclopedia and universe blog.
+  """
+  createAuthorUniverseTranslation(universeId: ID!, language: Locale!, input: AuthorUniverseTranslationInput): AuthorUniverseTranslationCreation!
+
+  """
+  Change fields of a translation. Fails with VERSION_CONFLICT, and changes
+  nothing, when the translation is no longer at expectedRevision.
+  """
+  updateAuthorUniverseTranslation(universeId: ID!, language: Locale!, expectedRevision: Int!, input: AuthorUniverseTranslationInput!): AuthorUniverseTranslation!
+  authorPublishChapter(input: AuthorChapterPublishInput!): AuthorChapterPublishResult!
+  authorCreateChapter(input: AuthorChapterCreateInput!): AuthorChapterCreateResult!
+  authorSaveChapterDraft(input: AuthorDraftSaveInput!): AuthorDraftSaveResult!
+
+  """
+  Hide a published story from readers, or show it again. Fails with
+  BAD_USER_INPUT for a story that was never published.
+  """
+  setAuthorStoryVisibility(storyId: ID!, visibility: AuthorStoryVisibility!): AuthorStoryHeader!
+
+  """
+  Rename a chapter, published or not; the change shows to readers at once.
+  """
+  renameAuthorChapter(input: AuthorChapterRenameInput!): AuthorChapterHeader!
+
+  """
+  Remove a chapter that was never published and renumber the chapters after
+  it. Fails with FAILED_PRECONDITION for a chapter published in any language
+  or to beta readers, for the only chapter of a story, and for a story whose
+  arcs or free preview count chapters.
+  """
+  removeAuthorChapter(input: AuthorChapterRemoveInput!): AuthorChapterRemoval!
+
+  """
+  Put the chapters of a story in a new order. Fails with FAILED_PRECONDITION
+  for a story whose arcs or free preview count chapters.
+  """
+  reorderAuthorChapters(input: AuthorChapterReorderInput!): AuthorChapterOrder!
+
+  """
+  Change a universe's own title, address, description, genre, rating, license
+  or language. Fails with CONFLICT for a taken address.
+  """
+  updateAuthorUniverse(universeId: ID!, input: AuthorUniverseUpdateInput!): AuthorUniverseHeader!
+
+  """
+  Add a draft entry with its category's template fields. Fails with CONFLICT,
+  naming the existing entryId, when the universe has an entry of that name.
+  """
+  createAuthorEncyclopediaEntry(input: AuthorEncyclopediaEntryCreateInput!): AuthorEncyclopediaEntry!
+
+  """Change an entry in its original language."""
+  updateAuthorEncyclopediaEntry(id: ID!, changes: AuthorEncyclopediaEntryChangesInput!): AuthorEncyclopediaEntry!
+
+  """
+  Write an entry's edition in a language the universe is translated into.
+  Fails with FAILED_PRECONDITION for any other language.
+  """
+  translateAuthorEncyclopediaEntry(input: AuthorEncyclopediaEntryTranslationInput!): AuthorEncyclopediaEntry!
+
+  """Publish an entry to readers, or take it back to a draft."""
+  setAuthorEncyclopediaEntryPublication(id: ID!, published: Boolean!): AuthorEncyclopediaEntry!
+
+  """
+  Delete an entry and its links from other entries. Staff can restore it.
+  """
+  deleteAuthorEncyclopediaEntry(id: ID!): AuthorEncyclopediaEntryDeletion!
+
+  """
+  Create a series, or replace one, as a line of stories in reading order.
+  Fails with VERSION_CONFLICT, and changes nothing, when the series is no
+  longer at expectedVersion.
+  """
+  saveAuthorSeries(input: AuthorSeriesSaveInput!): AuthorSeries!
+
+  """
+  Change a story's details. Fails with FORBIDDEN for a universe the
+  credential cannot use, and FAILED_PRECONDITION for a rating under review.
+  """
+  updateAuthorStory(storyId: ID!, input: AuthorStoryUpdateInput!): AuthorStoryHeader!
+  mutateAuthorBlog(input: AuthorBlogMutationInput!): AuthorBlogDocument!
 }
 
 enum AuthorWorkState {
@@ -186,92 +307,6 @@ type AuthorUniverseTranslationCreation {
   """
   created: Boolean!
   translation: AuthorUniverseTranslation!
-}
-
-type Mutation {
-  """
-  Open a language for a universe. Title and description start as copies of the
-  original unless given. Also opens the language for the universe's
-  encyclopedia and universe blog.
-  """
-  createAuthorUniverseTranslation(universeId: ID!, language: Locale!, input: AuthorUniverseTranslationInput): AuthorUniverseTranslationCreation!
-
-  """
-  Change fields of a translation. Fails with VERSION_CONFLICT, and changes
-  nothing, when the translation is no longer at expectedRevision.
-  """
-  updateAuthorUniverseTranslation(universeId: ID!, language: Locale!, expectedRevision: Int!, input: AuthorUniverseTranslationInput!): AuthorUniverseTranslation!
-  authorPublishChapter(input: AuthorChapterPublishInput!): AuthorChapterPublishResult!
-  authorCreateChapter(input: AuthorChapterCreateInput!): AuthorChapterCreateResult!
-  authorSaveChapterDraft(input: AuthorDraftSaveInput!): AuthorDraftSaveResult!
-
-  """
-  Hide a published story from readers, or show it again. Fails with
-  BAD_USER_INPUT for a story that was never published.
-  """
-  setAuthorStoryVisibility(storyId: ID!, visibility: AuthorStoryVisibility!): AuthorStoryHeader!
-
-  """
-  Rename a chapter, published or not; the change shows to readers at once.
-  """
-  renameAuthorChapter(input: AuthorChapterRenameInput!): AuthorChapterHeader!
-
-  """
-  Remove a chapter that was never published and renumber the chapters after
-  it. Fails with FAILED_PRECONDITION for a chapter published in any language
-  or to beta readers, for the only chapter of a story, and for a story whose
-  arcs or free preview count chapters.
-  """
-  removeAuthorChapter(input: AuthorChapterRemoveInput!): AuthorChapterRemoval!
-
-  """
-  Put the chapters of a story in a new order. Fails with FAILED_PRECONDITION
-  for a story whose arcs or free preview count chapters.
-  """
-  reorderAuthorChapters(input: AuthorChapterReorderInput!): AuthorChapterOrder!
-
-  """
-  Change a universe's own title, address, description, genre, rating, license
-  or language. Fails with CONFLICT for a taken address.
-  """
-  updateAuthorUniverse(universeId: ID!, input: AuthorUniverseUpdateInput!): AuthorUniverseHeader!
-
-  """
-  Add a draft entry with its category's template fields. Fails with CONFLICT,
-  naming the existing entryId, when the universe has an entry of that name.
-  """
-  createAuthorEncyclopediaEntry(input: AuthorEncyclopediaEntryCreateInput!): AuthorEncyclopediaEntry!
-
-  """Change an entry in its original language."""
-  updateAuthorEncyclopediaEntry(id: ID!, changes: AuthorEncyclopediaEntryChangesInput!): AuthorEncyclopediaEntry!
-
-  """
-  Write an entry's edition in a language the universe is translated into.
-  Fails with FAILED_PRECONDITION for any other language.
-  """
-  translateAuthorEncyclopediaEntry(input: AuthorEncyclopediaEntryTranslationInput!): AuthorEncyclopediaEntry!
-
-  """Publish an entry to readers, or take it back to a draft."""
-  setAuthorEncyclopediaEntryPublication(id: ID!, published: Boolean!): AuthorEncyclopediaEntry!
-
-  """
-  Delete an entry and its links from other entries. Staff can restore it.
-  """
-  deleteAuthorEncyclopediaEntry(id: ID!): AuthorEncyclopediaEntryDeletion!
-
-  """
-  Create a series, or replace one, as a line of stories in reading order.
-  Fails with VERSION_CONFLICT, and changes nothing, when the series is no
-  longer at expectedVersion.
-  """
-  saveAuthorSeries(input: AuthorSeriesSaveInput!): AuthorSeries!
-
-  """
-  Change a story's details. Fails with FORBIDDEN for a universe the
-  credential cannot use, and FAILED_PRECONDITION for a rating under review.
-  """
-  updateAuthorStory(storyId: ID!, input: AuthorStoryUpdateInput!): AuthorStoryHeader!
-  mutateAuthorBlog(input: AuthorBlogMutationInput!): AuthorBlogDocument!
 }
 
 type AuthorChapterHeader {
@@ -477,6 +512,12 @@ type AuthorEncyclopediaField {
   type: String!
   private: Boolean!
   text: String
+
+  """Whether an AI model wrote the text; readers see the disclosure."""
+  isAIGenerated: Boolean!
+
+  """The model named in the disclosure."""
+  aiModel: String
 }
 
 type AuthorEncyclopediaEntry {
@@ -496,6 +537,12 @@ type AuthorEncyclopediaEntry {
   parent: AuthorEncyclopediaLink
   related: [AuthorEncyclopediaLink!]!
   fields: [AuthorEncyclopediaField!]!
+
+  """Whether an AI model wrote the text; readers see the disclosure."""
+  isAIGenerated: Boolean!
+
+  """The model named in the disclosure."""
+  aiModel: String
 }
 
 """A field by its title; a new title adds a text field."""
@@ -524,6 +571,12 @@ input AuthorEncyclopediaEntryChangesInput {
   summary: String
   fields: [AuthorEncyclopediaTextFieldInput!]
   timeFields: [AuthorEncyclopediaTimeFieldInput!]
+
+  """
+  The AI model that wrote this text, such as claude-opus-5-5. Marks the entry
+  and the fields written here as AI-generated; readers see the disclosure.
+  """
+  aiModel: String
 }
 
 type AuthorEncyclopediaEntryDeletion {
@@ -544,6 +597,12 @@ input AuthorEncyclopediaEntryCreateInput {
   summary: String
   fields: [AuthorEncyclopediaTextFieldInput!]
   timeFields: [AuthorEncyclopediaTimeFieldInput!]
+
+  """
+  The AI model that wrote this text, such as claude-opus-5-5. Marks the entry
+  and the fields written here as AI-generated; readers see the disclosure.
+  """
+  aiModel: String
 }
 
 input AuthorEncyclopediaFieldTranslationInput {
