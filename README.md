@@ -120,12 +120,12 @@ Comics, manga and webtoons have their own scopes: `comic:read`, `comic:write` an
 | `updateComic({id, input})` | `comic:write` | The comic after the change |
 | `createComicChapter({comicId, title?})` | `comic:write` | A new draft chapter; not retried |
 | `updateComicChapter({id, input})`, `reorderComicChapters({comicId, chapterIds})`, `removeComicChapter({id})` | `comic:write` | Chapter structure, as for stories |
-| `addComicPages({chapterId, pages})` | `comic:write` | Appends uploaded `comic-page` images as pages, in order; not retried |
+| `addComicPages({chapterId, pages})` | `comic:write` | Appends uploaded `comic-page-art` images as pages, in order; not retried |
 | `updateComicPage({id, altText})`, `replaceComicPageImage({id, fileId})`, `reorderComicPages({chapterId, pageIds})`, `removeComicPage({id})` | `comic:write` | The page or pages after the change |
 | `createComicLayer(input)`, `updateComicLayer({id, order?, items?})`, `removeComicLayer({id})` | `comic:write` | Text, sound-effect and encyclopedia layers |
 | `publishComicChapter({id, publishAt?, audience?})` | `comic:publish` | Publishes, schedules or beta-releases a chapter; not retried |
 
-To add pages, `uploadComicPages` from `/images` fits each image to the `comic-page` policy, uploads it to the chapter, and appends the uploads as pages in the given order. `uploadComicPageImage` uploads a single image and returns its `fileId`, which you can pass to `replaceComicPageImage` or `addComicPages`.
+To add pages, `uploadComicPages` from `/images` fits each image to the `comic-page-art` policy, uploads it to the chapter, and appends the uploads as pages in the given order. `uploadComicPageImage` uploads a single image and returns its `fileId`, which you can pass to `replaceComicPageImage` or `addComicPages`.
 
 ```ts
 import { uploadComicPages } from '@literary-universe/sdk/images'
@@ -137,7 +137,7 @@ const pages = await uploadComicPages(client, chapter.id, [
 ])
 ```
 
-A `comic-page` upload goes to the bucket the chapter requires, and its result says which in `storageMode`. Pages of free comics are `open` and get a public `url`. Pages of paid, organization-licensed or private comics are `secure`: they have no URL, and readers receive them through the media gate after an access check. An upload can only be attached to the chapter it was uploaded to, by the person who uploaded it. Pages do not get a phone-sized variant yet, so readers load the full image.
+A `comic-page-art` upload goes to the bucket the chapter requires, and its result says which in `storageMode`. Pages of free comics are `open` and get a public `url`. Pages of paid, organization-licensed or private comics are `secure`: they have no URL, and readers receive them through the media gate after an access check. An upload can only be attached to the chapter it was uploaded to, by the person who uploaded it. Pages do not get a phone-sized variant yet, so readers load the full image.
 
 Layer items are positioned in fractions of the page (`x`, `y`, `w`, `h` between 0 and 1). `text` and `sfx` layers belong to one language and carry `text` with optional styling (`fontFamily`, `fontSize`, `color`, `bold`, `italic`, `underline`, `rotation`, and `writingMode: 'vertical-rl'` for vertical Japanese or Chinese lettering). `encyclopedia` layers hold hotspots (`entryType`, `entryId`) that open entries of the comic's universe. Image overlay layers and translation editions are edited in the workshop. Set a comic cover with `setCover({ kind: 'comic', ... })`.
 

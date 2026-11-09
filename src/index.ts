@@ -669,7 +669,7 @@ export class LiteraryUniverseClient {
 			0,
 		)
 	}
-	/** Appends `comic-page` uploads of a chapter as its pages, in order. Not retried: a repeat appends them again. */
+	/** Appends `comic-page-art` uploads of a chapter as its pages, in order. Not retried: a repeat appends them again. */
 	addComicPages(
 		input: LuAddComicPagesMutationVariables,
 		options?: RequestOptions,
@@ -695,7 +695,7 @@ export class LiteraryUniverseClient {
 			options,
 		)
 	}
-	/** Swaps a page's art for another `comic-page` upload of its chapter. */
+	/** Swaps a page's art for another `comic-page-art` upload of its chapter. */
 	replaceComicPageImage(
 		input: LuReplaceComicPageImageMutationVariables,
 		options?: RequestOptions,

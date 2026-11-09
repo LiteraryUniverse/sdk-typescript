@@ -84,7 +84,7 @@ export async function prepareImage(
 }
 
 /**
- * Fit an image to the comic-page policy and upload it to a chapter. Each call
+ * Fit an image to the comic-page-art policy and upload it to a chapter. Each call
  * stores its own file: pages sharing one would lose their art when another is
  * replaced, because a draft replacement deletes the old file.
  */
@@ -94,14 +94,14 @@ export async function uploadComicPageImage(
 	source: Uint8Array,
 	options: RequestOptions = {},
 ) {
-	const page = await prepareImage(source, 'comic-page', {
+	const page = await prepareImage(source, 'comic-page-art', {
 		signal: options.signal,
 	})
 	const { fileId } = await client.uploadImage(
 		{
 			bytes: page.bytes,
 			type: page.type,
-			purpose: 'comic-page',
+			purpose: 'comic-page-art',
 			targetId: chapterId,
 			operationId: randomUUID(),
 			policyVersion: page.policyVersion,

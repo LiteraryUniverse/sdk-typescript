@@ -503,7 +503,7 @@ const comicsWrite: Record<string, Spec> = {
 	'upload-comic-pages': tool({
 		title: 'Upload comic pages',
 		description:
-			'Append local image files to a chapter as pages, in the given order. Each image is fitted to the comic-page limits (5 MB, at most 8192 wide and 20000 tall) and stored where the comic requires: openly, or in the secure bucket for paid, licensed or private comics. Calling again appends the pages again.',
+			'Append local image files to a chapter as pages, in the given order. Each image is fitted to the comic page limits (5 MB, at most 8192 wide and 20000 tall) and stored where the comic requires: openly, or in the secure bucket for paid, licensed or private comics. Calling again appends the pages again.',
 		input: { chapterId: id, pages: comicPagePaths },
 		annotations: CREATE,
 		run: async (client, { chapterId, pages }, options) => {

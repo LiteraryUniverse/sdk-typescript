@@ -432,7 +432,7 @@ test('upload-comic-pages fits each local page to policy, uploads it to the chapt
 	for (const upload of [first, second]) {
 		const url = new URL(upload.url)
 		assert.equal(url.pathname, '/api/author/images')
-		assert.equal(url.searchParams.get('purpose'), 'comic-page')
+		assert.equal(url.searchParams.get('purpose'), 'comic-page-art')
 		assert.equal(url.searchParams.get('targetId'), 'chapter')
 		assert.match(url.searchParams.get('operationId'), /^[0-9a-f-]{36}$/)
 	}

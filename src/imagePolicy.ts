@@ -110,7 +110,7 @@ export const IMAGE_POLICY = {
       "recommendedWidth": 1600,
       "recommendedHeight": 534
     },
-    "comic-page": {
+    "comic-page-art": {
       "maxBytes": 5242880,
       "allowedTypes": [
         "image/jpeg",

@@ -236,7 +236,7 @@ export type AuthorComicChapterUpdateInput = {
 };
 
 export type AuthorComicPageInput = {
-  /** fileId of a comic-page image uploaded to this chapter. */
+  /** fileId of a comic-page-art image uploaded to this chapter. */
   fileId: string | number;
   /** What the page shows, for readers using assistive technology. */
   altText?: string | null | undefined;

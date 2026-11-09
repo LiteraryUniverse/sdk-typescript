@@ -846,7 +846,7 @@ input AuthorComicChapterUpdateInput {
 }
 
 input AuthorComicPageInput {
-  """fileId of a comic-page image uploaded to this chapter."""
+  """fileId of a comic-page-art image uploaded to this chapter."""
   fileId: ID!
 
   """What the page shows, for readers using assistive technology."""
