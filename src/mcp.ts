@@ -405,7 +405,8 @@ const universesWrite: Record<string, Spec> = {
 			fields: z.array(z.object(textField)).optional(),
 			timeFields: z.array(z.object(timeField)).optional(),
 		},
-		annotations: WRITE,
+		// Replaces existing values; hosts must offer overwrite approval.
+		annotations: hints(false, true, true),
 		run: (client, { id, ...changes }) =>
 			client.updateEncyclopediaEntry({ id, changes }),
 	}),
@@ -425,7 +426,8 @@ const universesWrite: Record<string, Spec> = {
 				)
 				.optional(),
 		},
-		annotations: WRITE,
+		// Can overwrite an existing translated edition.
+		annotations: hints(false, true, true),
 		run: (client, args) => client.translateEncyclopediaEntry(args),
 	}),
 	'set-encyclopedia-entry-publication': tool({
