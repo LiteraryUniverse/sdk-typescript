@@ -1,10 +1,15 @@
+import { randomUUID } from 'node:crypto'
 import { IMAGE_POLICY, type ImagePurpose } from './imagePolicy.js'
 import type {
 	ImagePreparationOptions,
 	PreparedImage,
 } from './imageProcessing.js'
 import { runImageWorker } from './imageWorker.cjs'
-import { LiteraryUniverseApiError } from './index.js'
+import {
+	LiteraryUniverseApiError,
+	type LiteraryUniverseClient,
+	type RequestOptions,
+} from './index.js'
 
 export {
 	IMAGE_POLICY,
@@ -76,4 +81,53 @@ export async function prepareImage(
 			workerFailure,
 		),
 	)
+}
+
+/**
+ * Fit an image to the comic-page policy and upload it to a chapter. Each call
+ * stores its own file: pages sharing one would lose their art when another is
+ * replaced, because a draft replacement deletes the old file.
+ */
+export async function uploadComicPageImage(
+	client: LiteraryUniverseClient,
+	chapterId: string,
+	source: Uint8Array,
+	options: RequestOptions = {},
+) {
+	const page = await prepareImage(source, 'comic-page', {
+		signal: options.signal,
+	})
+	const { fileId } = await client.uploadImage(
+		{
+			bytes: page.bytes,
+			type: page.type,
+			purpose: 'comic-page',
+			targetId: chapterId,
+			operationId: randomUUID(),
+			policyVersion: page.policyVersion,
+		},
+		options,
+	)
+	return fileId
+}
+
+/** Upload images and append them to a chapter as pages, in the given order. */
+export async function uploadComicPages(
+	client: LiteraryUniverseClient,
+	chapterId: string,
+	pages: readonly { bytes: Uint8Array; altText?: string }[],
+	options: RequestOptions = {},
+) {
+	const uploaded = []
+	for (const page of pages)
+		uploaded.push({
+			fileId: await uploadComicPageImage(
+				client,
+				chapterId,
+				page.bytes,
+				options,
+			),
+			altText: page.altText,
+		})
+	return client.addComicPages({ chapterId, pages: uploaded }, options)
 }

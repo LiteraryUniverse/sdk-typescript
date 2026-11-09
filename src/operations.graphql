@@ -157,3 +157,79 @@ query LuBlogMenus($blogId: ID!) {
 mutation LuMutateBlog($input: AuthorBlogMutationInput!) {
   result: mutateAuthorBlog(input: $input) { id version data }
 }
+
+query LuComics($first: Int, $after: String) {
+  result: authorComics(first: $first, after: $after) {
+    nodes { id title slug description format language license rating genres tags contentWarnings universeId organizationId relatedStoryIds coverUrl isAIGenerated aiModel chaptersCount pageCountTotal createdAt updatedAt publishedAt privateAt }
+    pageInfo { endCursor hasNextPage }
+  }
+}
+query LuComic($id: ID!) {
+  result: authorComic(id: $id) { id title slug description format language license rating genres tags contentWarnings universeId organizationId relatedStoryIds coverUrl isAIGenerated aiModel chaptersCount pageCountTotal createdAt updatedAt publishedAt privateAt }
+}
+query LuComicChapters($comicId: ID!) {
+  result: authorComicChapters(comicId: $comicId) { id comicId sequence title language parentChapterId pageCount isAIGenerated aiModel publishedAt updatedAt }
+}
+query LuComicPages($chapterId: ID!) {
+  result: authorComicPages(chapterId: $chapterId) {
+    id chapterId sequence storageMode imageUrl width height altText
+    layers { id pageId kind scope language order items hasImage }
+  }
+}
+mutation LuCreateComic($input: AuthorComicCreateInput!) {
+  result: createAuthorComic(input: $input) { id title slug description format language license rating genres tags contentWarnings universeId organizationId relatedStoryIds coverUrl isAIGenerated aiModel chaptersCount pageCountTotal createdAt updatedAt publishedAt privateAt }
+}
+mutation LuUpdateComic($id: ID!, $input: AuthorComicUpdateInput!) {
+  result: updateAuthorComic(id: $id, input: $input) { id title slug description format language license rating genres tags contentWarnings universeId organizationId relatedStoryIds coverUrl isAIGenerated aiModel chaptersCount pageCountTotal createdAt updatedAt publishedAt privateAt }
+}
+mutation LuCreateComicChapter($input: AuthorComicChapterCreateInput!) {
+  result: createAuthorComicChapter(input: $input) { id comicId sequence title language parentChapterId pageCount isAIGenerated aiModel publishedAt updatedAt }
+}
+mutation LuUpdateComicChapter($id: ID!, $input: AuthorComicChapterUpdateInput!) {
+  result: updateAuthorComicChapter(id: $id, input: $input) { id comicId sequence title language parentChapterId pageCount isAIGenerated aiModel publishedAt updatedAt }
+}
+mutation LuReorderComicChapters($comicId: ID!, $chapterIds: [ID!]!) {
+  result: reorderAuthorComicChapters(comicId: $comicId, chapterIds: $chapterIds) { id comicId sequence title language parentChapterId pageCount isAIGenerated aiModel publishedAt updatedAt }
+}
+mutation LuRemoveComicChapter($id: ID!) {
+  result: removeAuthorComicChapter(id: $id) { id }
+}
+mutation LuAddComicPages($chapterId: ID!, $pages: [AuthorComicPageInput!]!) {
+  result: addAuthorComicPages(chapterId: $chapterId, pages: $pages) {
+    id chapterId sequence storageMode imageUrl width height altText
+    layers { id pageId kind scope language order items hasImage }
+  }
+}
+mutation LuUpdateComicPage($id: ID!, $altText: String!) {
+  result: updateAuthorComicPage(id: $id, altText: $altText) {
+    id chapterId sequence storageMode imageUrl width height altText
+    layers { id pageId kind scope language order items hasImage }
+  }
+}
+mutation LuReplaceComicPageImage($id: ID!, $fileId: ID!) {
+  result: replaceAuthorComicPageImage(id: $id, fileId: $fileId) {
+    id chapterId sequence storageMode imageUrl width height altText
+    layers { id pageId kind scope language order items hasImage }
+  }
+}
+mutation LuReorderComicPages($chapterId: ID!, $pageIds: [ID!]!) {
+  result: reorderAuthorComicPages(chapterId: $chapterId, pageIds: $pageIds) {
+    id chapterId sequence storageMode imageUrl width height altText
+    layers { id pageId kind scope language order items hasImage }
+  }
+}
+mutation LuRemoveComicPage($id: ID!) {
+  result: removeAuthorComicPage(id: $id) { id }
+}
+mutation LuCreateComicLayer($input: AuthorComicLayerCreateInput!) {
+  result: createAuthorComicLayer(input: $input) { id pageId kind scope language order items hasImage }
+}
+mutation LuUpdateComicLayer($id: ID!, $order: Int, $items: [AuthorComicLayerItemInput!]) {
+  result: updateAuthorComicLayer(id: $id, order: $order, items: $items) { id pageId kind scope language order items hasImage }
+}
+mutation LuRemoveComicLayer($id: ID!) {
+  result: removeAuthorComicLayer(id: $id) { id }
+}
+mutation LuPublishComicChapter($id: ID!, $publishAt: DateTime, $audience: AuthorPublicationAudience) {
+  result: publishAuthorComicChapter(id: $id, publishAt: $publishAt, audience: $audience) { id comicId sequence title language parentChapterId pageCount isAIGenerated aiModel publishedAt updatedAt }
+}

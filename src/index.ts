@@ -5,10 +5,16 @@ import {
 	type AuthorChapterRemoveInput,
 	type AuthorChapterRenameInput,
 	type AuthorChapterReorderInput,
+	type AuthorComicChapterCreateInput,
+	type AuthorComicCreateInput,
+	type AuthorComicLayerCreateInput,
 	type AuthorDraftSaveInput,
 	type AuthorEncyclopediaEntryCreateInput,
 	type AuthorEncyclopediaEntryTranslationInput,
 	type AuthorSeriesSaveInput,
+	LuAddComicPagesDocument,
+	type LuAddComicPagesMutation,
+	type LuAddComicPagesMutationVariables,
 	LuBlogMenusDocument,
 	type LuBlogMenusQuery,
 	type LuBlogMenusQueryVariables,
@@ -18,8 +24,26 @@ import {
 	LuChaptersDocument,
 	type LuChaptersQuery,
 	type LuChaptersQueryVariables,
+	LuComicChaptersDocument,
+	type LuComicChaptersQuery,
+	type LuComicChaptersQueryVariables,
+	LuComicDocument,
+	LuComicPagesDocument,
+	type LuComicPagesQuery,
+	type LuComicPagesQueryVariables,
+	type LuComicQuery,
+	type LuComicQueryVariables,
+	LuComicsDocument,
+	type LuComicsQuery,
+	type LuComicsQueryVariables,
 	LuCreateChapterDocument,
 	type LuCreateChapterMutation,
+	LuCreateComicChapterDocument,
+	type LuCreateComicChapterMutation,
+	LuCreateComicDocument,
+	LuCreateComicLayerDocument,
+	type LuCreateComicLayerMutation,
+	type LuCreateComicMutation,
 	LuCreateEncyclopediaEntryDocument,
 	type LuCreateEncyclopediaEntryMutation,
 	LuCreateUniverseTranslationDocument,
@@ -50,12 +74,33 @@ import {
 	type LuProfileQuery,
 	LuPublishChapterDocument,
 	type LuPublishChapterMutation,
+	LuPublishComicChapterDocument,
+	type LuPublishComicChapterMutation,
+	type LuPublishComicChapterMutationVariables,
 	LuRemoveChapterDocument,
 	type LuRemoveChapterMutation,
+	LuRemoveComicChapterDocument,
+	type LuRemoveComicChapterMutation,
+	type LuRemoveComicChapterMutationVariables,
+	LuRemoveComicLayerDocument,
+	type LuRemoveComicLayerMutation,
+	type LuRemoveComicLayerMutationVariables,
+	LuRemoveComicPageDocument,
+	type LuRemoveComicPageMutation,
+	type LuRemoveComicPageMutationVariables,
 	LuRenameChapterDocument,
 	type LuRenameChapterMutation,
 	LuReorderChaptersDocument,
 	type LuReorderChaptersMutation,
+	LuReorderComicChaptersDocument,
+	type LuReorderComicChaptersMutation,
+	type LuReorderComicChaptersMutationVariables,
+	LuReorderComicPagesDocument,
+	type LuReorderComicPagesMutation,
+	type LuReorderComicPagesMutationVariables,
+	LuReplaceComicPageImageDocument,
+	type LuReplaceComicPageImageMutation,
+	type LuReplaceComicPageImageMutationVariables,
 	LuSaveDraftDocument,
 	type LuSaveDraftMutation,
 	LuSaveSeriesDocument,
@@ -83,6 +128,18 @@ import {
 	LuUniversesDocument,
 	type LuUniversesQuery,
 	type LuUniversesQueryVariables,
+	LuUpdateComicChapterDocument,
+	type LuUpdateComicChapterMutation,
+	type LuUpdateComicChapterMutationVariables,
+	LuUpdateComicDocument,
+	LuUpdateComicLayerDocument,
+	type LuUpdateComicLayerMutation,
+	type LuUpdateComicLayerMutationVariables,
+	type LuUpdateComicMutation,
+	type LuUpdateComicMutationVariables,
+	LuUpdateComicPageDocument,
+	type LuUpdateComicPageMutation,
+	type LuUpdateComicPageMutationVariables,
 	LuUpdateEncyclopediaEntryDocument,
 	type LuUpdateEncyclopediaEntryMutation,
 	type LuUpdateEncyclopediaEntryMutationVariables,
@@ -128,6 +185,8 @@ export type UploadedImage = {
 	type: string
 	sha256: string
 	policyVersion: string
+	/** Comic pages only. A `secure` page is served to readers through the media gate and has no `url`. */
+	storageMode?: 'open' | 'secure'
 }
 type Transfer = {
 	endpoint: URL
@@ -506,6 +565,229 @@ export class LiteraryUniverseClient {
 		)
 	}
 
+	/** Comics, manga and webtoons you create on, paginated by `pageInfo.endCursor`. */
+	comics(input: LuComicsQueryVariables = {}, options?: RequestOptions) {
+		return this.read<LuComicsQuery>(
+			LuComicsDocument,
+			'LuComics',
+			input,
+			options,
+		)
+	}
+	comic(input: LuComicQueryVariables, options?: RequestOptions) {
+		return this.read<LuComicQuery>(LuComicDocument, 'LuComic', input, options)
+	}
+	/** Original chapters and translation editions, in reading order. */
+	comicChapters(
+		input: LuComicChaptersQueryVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuComicChaptersQuery>(
+			LuComicChaptersDocument,
+			'LuComicChapters',
+			input,
+			options,
+		)
+	}
+	/** A chapter's draft pages in order, with their layers. */
+	comicPages(input: LuComicPagesQueryVariables, options?: RequestOptions) {
+		return this.read<LuComicPagesQuery>(
+			LuComicPagesDocument,
+			'LuComicPages',
+			input,
+			options,
+		)
+	}
+	/** Creates a draft comic. Not retried: a repeat creates another comic. */
+	createComic(input: AuthorComicCreateInput, options?: RequestOptions) {
+		return this.read<LuCreateComicMutation>(
+			LuCreateComicDocument,
+			'LuCreateComic',
+			{ input },
+			options,
+			undefined,
+			0,
+		)
+	}
+	/** Changes the given fields of a comic. */
+	updateComic(input: LuUpdateComicMutationVariables, options?: RequestOptions) {
+		return this.read<LuUpdateComicMutation>(
+			LuUpdateComicDocument,
+			'LuUpdateComic',
+			input,
+			options,
+		)
+	}
+	/** Appends a draft chapter. Not retried: a repeat appends another. */
+	createComicChapter(
+		input: AuthorComicChapterCreateInput,
+		options?: RequestOptions,
+	) {
+		return this.read<LuCreateComicChapterMutation>(
+			LuCreateComicChapterDocument,
+			'LuCreateComicChapter',
+			{ input },
+			options,
+			undefined,
+			0,
+		)
+	}
+	updateComicChapter(
+		input: LuUpdateComicChapterMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuUpdateComicChapterMutation>(
+			LuUpdateComicChapterDocument,
+			'LuUpdateComicChapter',
+			input,
+			options,
+		)
+	}
+	/** Puts every original chapter of a comic in the given order. */
+	reorderComicChapters(
+		input: LuReorderComicChaptersMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuReorderComicChaptersMutation>(
+			LuReorderComicChaptersDocument,
+			'LuReorderComicChapters',
+			input,
+			options,
+		)
+	}
+	/** Removes a chapter that never went live. Not retried. */
+	removeComicChapter(
+		input: LuRemoveComicChapterMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuRemoveComicChapterMutation>(
+			LuRemoveComicChapterDocument,
+			'LuRemoveComicChapter',
+			input,
+			options,
+			undefined,
+			0,
+		)
+	}
+	/** Appends `comic-page` uploads of a chapter as its pages, in order. Not retried: a repeat appends them again. */
+	addComicPages(
+		input: LuAddComicPagesMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuAddComicPagesMutation>(
+			LuAddComicPagesDocument,
+			'LuAddComicPages',
+			input,
+			options,
+			undefined,
+			0,
+		)
+	}
+	/** Sets a page's alt text. */
+	updateComicPage(
+		input: LuUpdateComicPageMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuUpdateComicPageMutation>(
+			LuUpdateComicPageDocument,
+			'LuUpdateComicPage',
+			input,
+			options,
+		)
+	}
+	/** Swaps a page's art for another `comic-page` upload of its chapter. */
+	replaceComicPageImage(
+		input: LuReplaceComicPageImageMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuReplaceComicPageImageMutation>(
+			LuReplaceComicPageImageDocument,
+			'LuReplaceComicPageImage',
+			input,
+			options,
+		)
+	}
+	/** Puts every page of a chapter in the given order. */
+	reorderComicPages(
+		input: LuReorderComicPagesMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuReorderComicPagesMutation>(
+			LuReorderComicPagesDocument,
+			'LuReorderComicPages',
+			input,
+			options,
+		)
+	}
+	/** Not retried: a repeat finds nothing to remove. */
+	removeComicPage(
+		input: LuRemoveComicPageMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuRemoveComicPageMutation>(
+			LuRemoveComicPageDocument,
+			'LuRemoveComicPage',
+			input,
+			options,
+			undefined,
+			0,
+		)
+	}
+	/** Adds a text, sfx or encyclopedia layer of positioned items to a page. Not retried. */
+	createComicLayer(
+		input: AuthorComicLayerCreateInput,
+		options?: RequestOptions,
+	) {
+		return this.read<LuCreateComicLayerMutation>(
+			LuCreateComicLayerDocument,
+			'LuCreateComicLayer',
+			{ input },
+			options,
+			undefined,
+			0,
+		)
+	}
+	/** Replaces a layer's items and/or changes its order. */
+	updateComicLayer(
+		input: LuUpdateComicLayerMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuUpdateComicLayerMutation>(
+			LuUpdateComicLayerDocument,
+			'LuUpdateComicLayer',
+			input,
+			options,
+		)
+	}
+	/** Not retried: a repeat finds nothing to remove. */
+	removeComicLayer(
+		input: LuRemoveComicLayerMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuRemoveComicLayerMutation>(
+			LuRemoveComicLayerDocument,
+			'LuRemoveComicLayer',
+			input,
+			options,
+			undefined,
+			0,
+		)
+	}
+	/** Publishes, schedules (`publishAt`) or beta-releases (`audience: 'BETA'`) a chapter. Not retried. */
+	publishComicChapter(
+		input: LuPublishComicChapterMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuPublishComicChapterMutation>(
+			LuPublishComicChapterDocument,
+			'LuPublishComicChapter',
+			input,
+			options,
+			undefined,
+			0,
+		)
+	}
+
 	saveDraft(input: AuthorDraftSaveInput, options?: RequestOptions) {
 		return this.read<LuSaveDraftMutation>(
 			LuSaveDraftDocument,
@@ -615,12 +897,12 @@ export class LiteraryUniverseClient {
 	}
 
 	/**
-	 * Replace a story's or universe's cover. The server crops it to the cover
+	 * Replace a story's, universe's or comic's cover. The server crops it to the cover
 	 * shape and stores WebP; prepare it with prepareImage first to stay under 5 MB.
 	 */
 	async setCover(
 		input: {
-			kind: 'story' | 'universe'
+			kind: 'story' | 'universe' | 'comic'
 			id: string
 			bytes: Uint8Array
 			/** image/jpeg, image/png or image/webp, as PreparedImage.type reports. */
@@ -633,7 +915,9 @@ export class LiteraryUniverseClient {
 				'PAYLOAD_TOO_LARGE',
 				'Cover exceeds the upload byte ceiling',
 			)
-		const kind = input.kind === 'story' ? 'stories' : 'universes'
+		const kind = { story: 'stories', universe: 'universes', comic: 'comics' }[
+			input.kind
+		]
 		const endpoint = new URL(
 			`api/${kind}/${encodeURIComponent(input.id)}/cover`,
 			new URL('.', this.endpoint),

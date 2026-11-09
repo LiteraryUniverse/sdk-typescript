@@ -22,7 +22,7 @@ export type McpToolOptions = {
 	tools?: readonly string[]
 	docsBaseUrl?: string
 	fetch?: typeof globalThis.fetch
-	/** Enables set-cover from a local path; stdio servers only. */
+	/** Enables set-cover and comic page uploads from local paths; stdio servers only. */
 	readLocalFile?: (path: string) => Promise<Uint8Array>
 }
 
@@ -274,6 +274,331 @@ const publish: Record<string, Spec> = {
 				? JSON.stringify(result, null, 2)
 				: `Nothing published. Call publish-chapter again with confirm: true to publish ${JSON.stringify(result.wouldPublish)}.`,
 	}),
+	'publish-comic-chapter': tool({
+		title: 'Publish comic chapter',
+		description:
+			'Publish a comic chapter to readers or beta readers, now or at publishAt. Publishing a live chapter again releases later page edits; the first chapter also publishes the comic. Without confirm: true nothing happens and the request is echoed back; ask the author first.',
+		input: {
+			id,
+			publishAt: z
+				.string()
+				.optional()
+				.describe('ISO 8601 with timezone; now when omitted'),
+			audience: z.enum(['READERS', 'BETA']).default('READERS'),
+			confirm: z.boolean().default(false),
+		},
+		annotations: hints(false, false, false, true),
+		run: async (client, { confirm, ...input }) => {
+			if (!confirm) return { published: false, wouldPublish: input }
+			return { published: true, ...(await client.publishComicChapter(input)) }
+		},
+		text: (result) =>
+			result.published
+				? JSON.stringify(result, null, 2)
+				: `Nothing published. Call publish-comic-chapter again with confirm: true to publish ${JSON.stringify(result.wouldPublish)}.`,
+	}),
+}
+
+const layerItem = z.object({
+	id: z.string().optional().describe('Keep an item id to update it in place'),
+	x: z
+		.number()
+		.min(0)
+		.max(1)
+		.describe('Left edge, as a fraction of the page width'),
+	y: z
+		.number()
+		.min(0)
+		.max(1)
+		.describe('Top edge, as a fraction of the page height'),
+	w: z
+		.number()
+		.min(0)
+		.max(1)
+		.describe('Width, as a fraction of the page width'),
+	h: z
+		.number()
+		.min(0)
+		.max(1)
+		.describe('Height, as a fraction of the page height'),
+	order: z.number().int().optional(),
+	text: z
+		.string()
+		.max(1000)
+		.optional()
+		.describe('Speech, caption or sound effect'),
+	fontFamily: z.string().optional(),
+	fontSize: z.number().optional(),
+	color: z.string().optional().describe('CSS color such as #111111'),
+	bold: z.boolean().optional(),
+	italic: z.boolean().optional(),
+	underline: z.boolean().optional(),
+	rotation: z.number().optional().describe('Degrees'),
+	writingMode: z
+		.enum(['horizontal-tb', 'vertical-rl'])
+		.optional()
+		.describe('vertical-rl for Japanese or Chinese vertical lettering'),
+	label: z.string().optional(),
+	entryType: z.string().optional().describe('Encyclopedia layers only'),
+	entryId: z.string().optional().describe('Encyclopedia layers only'),
+})
+const comicFormat = z
+	.enum(['manga', 'webtoon', 'comic'])
+	.describe(
+		'manga reads right to left, webtoon scrolls vertically, comic reads left to right',
+	)
+const comicDetails = {
+	description: z.string().optional(),
+	rating: z.string().optional(),
+	genres: z.array(z.string()).max(2).optional(),
+	tags: z.array(z.string()).max(20).optional(),
+	contentWarnings: z.array(z.string()).optional(),
+	language: z.string().optional().describe('Locale code such as en'),
+	isAIGenerated: z.boolean().optional(),
+	aiModel: z.string().optional(),
+}
+const comicPagePaths = z
+	.array(
+		z.object({
+			path: z.string().describe('Local path of a JPEG, PNG or WebP page'),
+			altText: z
+				.string()
+				.max(500)
+				.optional()
+				.describe('What the page shows, for screen readers'),
+		}),
+	)
+	.min(1)
+	.max(300)
+	.describe('Pages in reading order')
+
+/** Local page files need sharp, an optional peer, so the image module loads on first use. */
+function readPages(options: McpToolOptions) {
+	const read = options.readLocalFile
+	if (!read) throw new Error('Comic page uploads need local file access')
+	return { read, images: import('./images.js') }
+}
+
+const comics: Record<string, Spec> = {
+	'list-comics': tool({
+		title: 'List comics',
+		description:
+			'A page of the comics, manga and webtoons this account creates on.',
+		input: page,
+		annotations: READ,
+		run: (client, args) => client.comics(args),
+	}),
+	'get-comic': tool({
+		title: 'Get comic',
+		description: 'A comic with its format, language, license and counts.',
+		input: { id },
+		annotations: READ,
+		run: (client, args) => client.comic(args),
+	}),
+	'list-comic-chapters': tool({
+		title: 'List comic chapters',
+		description:
+			'Chapters of a comic in reading order, translation editions included (they carry parentChapterId).',
+		input: { comicId: id },
+		annotations: READ,
+		run: async (client, args) => ({
+			chapters: await client.comicChapters(args),
+		}),
+	}),
+	'list-comic-pages': tool({
+		title: 'List comic pages',
+		description:
+			'Draft pages of a chapter in order, with their text layers. Open pages carry imageUrl; secure pages of paid or private comics do not.',
+		input: { chapterId: id },
+		annotations: READ,
+		run: async (client, args) => ({ pages: await client.comicPages(args) }),
+	}),
+}
+
+const comicsWrite: Record<string, Spec> = {
+	'create-comic': tool({
+		title: 'Create comic',
+		description:
+			'Create a draft comic, manga or webtoon owned by this account. Each call creates a new one.',
+		input: {
+			...comicDetails,
+			title: z.string().max(100),
+			description: z.string().max(1600),
+			format: comicFormat,
+			license: z
+				.enum([
+					'lu-e',
+					'lu-ne',
+					'cc-by',
+					'cc-by-sa',
+					'cc-by-nd',
+					'cc-by-nc',
+					'cc-by-nc-sa',
+					'cc-by-nc-nd',
+					'cc0',
+				])
+				.describe(
+					'lu-e and lu-ne are Literary Universe licenses (pages always stored securely); the rest are Creative Commons',
+				),
+			universeId: z.string().optional().describe('A universe you edit'),
+			relatedStoryIds: z
+				.array(z.string())
+				.optional()
+				.describe('Your stories this comic adapts'),
+			slug: z.string().optional(),
+		},
+		annotations: CREATE,
+		run: (client, input) => client.createComic(input),
+	}),
+	'update-comic': tool({
+		title: 'Update comic',
+		description: 'Change the given details of a comic; the rest stay.',
+		input: {
+			id,
+			title: z.string().max(100).optional(),
+			format: comicFormat.optional(),
+			...comicDetails,
+		},
+		annotations: WRITE,
+		run: (client, { id, ...input }) => client.updateComic({ id, input }),
+	}),
+	'create-comic-chapter': tool({
+		title: 'Create comic chapter',
+		description:
+			'Append a draft chapter; without a title it is named Prolog or Chapter N in the comic language. Each call adds one.',
+		input: { comicId: id, title: z.string().max(100).optional() },
+		annotations: CREATE,
+		run: (client, input) => client.createComicChapter(input),
+	}),
+	'update-comic-chapter': tool({
+		title: 'Update comic chapter',
+		description: 'Rename a chapter or mark it AI-generated.',
+		input: {
+			id,
+			title: z.string().max(100).optional(),
+			isAIGenerated: z.boolean().optional(),
+			aiModel: z.string().optional(),
+		},
+		annotations: WRITE,
+		run: (client, { id, ...input }) => client.updateComicChapter({ id, input }),
+	}),
+	'reorder-comic-chapters': tool({
+		title: 'Reorder comic chapters',
+		description:
+			'Name every original chapter of the comic once, in the new order.',
+		input: { comicId: id, chapterIds: z.array(id) },
+		annotations: WRITE,
+		run: async (client, args) => ({
+			chapters: await client.reorderComicChapters(args),
+		}),
+	}),
+	'remove-comic-chapter': tool({
+		title: 'Remove comic chapter',
+		description:
+			'Delete a chapter that never went live, with its pages and layers.',
+		input: { id },
+		annotations: DESTROY,
+		run: (client, args) => client.removeComicChapter(args),
+	}),
+	'upload-comic-pages': tool({
+		title: 'Upload comic pages',
+		description:
+			'Append local image files to a chapter as pages, in the given order. Each image is fitted to the comic-page limits (5 MB, at most 8192 wide and 20000 tall) and stored where the comic requires: openly, or in the secure bucket for paid, licensed or private comics. Calling again appends the pages again.',
+		input: { chapterId: id, pages: comicPagePaths },
+		annotations: CREATE,
+		run: async (client, { chapterId, pages }, options) => {
+			const { read, images } = readPages(options)
+			const files = []
+			for (const page of pages)
+				files.push({ bytes: await read(page.path), altText: page.altText })
+			return {
+				pages: await (await images).uploadComicPages(client, chapterId, files),
+			}
+		},
+	}),
+	'replace-comic-page-image': tool({
+		title: 'Replace comic page image',
+		description:
+			"Swap a page's art for a local image file, keeping its place, alt text and layers.",
+		input: {
+			id,
+			chapterId: id.describe('The chapter the page belongs to'),
+			path: z.string().describe('Local path of a JPEG, PNG or WebP page'),
+		},
+		annotations: WRITE,
+		run: async (client, { id, chapterId, path }, options) => {
+			const { read, images } = readPages(options)
+			const fileId = await (await images).uploadComicPageImage(
+				client,
+				chapterId,
+				await read(path),
+			)
+			return client.replaceComicPageImage({ id, fileId })
+		},
+	}),
+	'update-comic-page': tool({
+		title: 'Update comic page',
+		description: "Set a page's alt text: what it shows, for screen readers.",
+		input: { id, altText: z.string().max(500) },
+		annotations: WRITE,
+		run: (client, args) => client.updateComicPage(args),
+	}),
+	'reorder-comic-pages': tool({
+		title: 'Reorder comic pages',
+		description: 'Name every page of the chapter once, in the new order.',
+		input: { chapterId: id, pageIds: z.array(id) },
+		annotations: WRITE,
+		run: async (client, args) => ({
+			pages: await client.reorderComicPages(args),
+		}),
+	}),
+	'remove-comic-page': tool({
+		title: 'Remove comic page',
+		description: 'Delete a draft page with its layers.',
+		input: { id },
+		annotations: DESTROY,
+		run: (client, args) => client.removeComicPage(args),
+	}),
+	'create-comic-layer': tool({
+		title: 'Create comic layer',
+		description:
+			'Letter a page: add a layer of positioned items over its art. text holds speech bubbles and captions, sfx sound effects; both belong to one language. encyclopedia holds hotspots that open entries of the comic universe in every language.',
+		input: {
+			pageId: id,
+			kind: z.enum(['text', 'sfx', 'encyclopedia']),
+			language: z
+				.string()
+				.optional()
+				.describe('Locale code; required for text and sfx layers'),
+			order: z
+				.number()
+				.int()
+				.optional()
+				.describe('Stacking order; higher is on top'),
+			items: z.array(layerItem).min(1),
+		},
+		annotations: CREATE,
+		run: (client, input) => client.createComicLayer(input),
+	}),
+	'update-comic-layer': tool({
+		title: 'Update comic layer',
+		description:
+			"Replace a layer's items (send them all, with their ids to keep them) and/or change its order.",
+		input: {
+			id,
+			order: z.number().int().optional(),
+			items: z.array(layerItem).optional(),
+		},
+		annotations: WRITE,
+		run: (client, args) => client.updateComicLayer(args),
+	}),
+	'remove-comic-layer': tool({
+		title: 'Remove comic layer',
+		description: 'Delete a layer from its page.',
+		input: { id },
+		annotations: DESTROY,
+		run: (client, args) => client.removeComicLayer(args),
+	}),
 }
 
 const universes: Record<string, Spec> = {
@@ -473,9 +798,9 @@ const images: Record<string, Spec> = {
 	'set-cover': tool({
 		title: 'Set cover',
 		description:
-			'Replace a story or universe cover with a local image file under 5 MB; the server crops it.',
+			'Replace a story, universe or comic cover with a local image file under 5 MB; the server crops it.',
 		input: {
-			kind: z.enum(['story', 'universe']),
+			kind: z.enum(['story', 'universe', 'comic']),
 			id,
 			path: z.string().describe('Local path of a JPEG, PNG or WebP file'),
 		},
@@ -620,6 +945,8 @@ const CATEGORIES = {
 	publish,
 	universes,
 	'universes-write': universesWrite,
+	comics,
+	'comics-write': comicsWrite,
 	images,
 	docs,
 }
@@ -640,6 +967,8 @@ export const DEFAULT_TOOL_SELECTION: readonly string[] = [
 	'stories-write',
 	'universes',
 	'universes-write',
+	'comics',
+	'comics-write',
 	'images',
 	'docs',
 ]
@@ -736,13 +1065,19 @@ function registerResources(server: McpServer, options: McpToolOptions) {
 	)
 }
 
+const LOCAL_FILE_TOOLS = new Set([
+	'set-cover',
+	'upload-comic-pages',
+	'replace-comic-page-image',
+])
+
 /** Registers the selected tools and the story/draft resources on an MCP server. */
 export function registerLiteraryUniverseTools(
 	server: McpServer,
 	options: McpToolOptions,
 ): { registered: string[] } {
 	const registered = selectTools(options.tools).filter(
-		(name) => name !== 'set-cover' || options.readLocalFile,
+		(name) => !LOCAL_FILE_TOOLS.has(name) || options.readLocalFile,
 	)
 	for (const name of registered) {
 		const spec = TOOLS[name]
