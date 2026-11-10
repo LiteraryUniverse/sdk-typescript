@@ -201,11 +201,17 @@ test('guided story creation requires the author choices before issuing a mutatio
 		slug: 'my-story',
 		description: 'Description',
 		language: 'en',
-		genres: ['fantasy'],
+		genres: ['fantasy', 'mystery'],
 		rating: 'teen',
 		license: 'cc-by',
 		isAIGenerated: false,
 	}
+	const tooMany = await call('create-story', {
+		...input,
+		genres: ['fantasy', 'mystery', 'history'],
+	})
+	assert.equal(tooMany.isError, true)
+	assert.equal(sent.length, 0)
 	const created = await call('create-story', input)
 	assert.equal(sent[0].operationName, 'LuCreateStory')
 	assert.deepEqual(sent[0].variables.input, input)

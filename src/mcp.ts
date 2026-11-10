@@ -164,7 +164,7 @@ const creation: Record<string, Spec> = {
 				.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
 			description: z.string().min(1).max(800),
 			language: z.string().min(1),
-			genres: z.array(z.string()).min(1).max(10),
+			genres: z.array(z.string()).min(1).max(2),
 			rating: z.string().min(1),
 			license: z.string().min(1),
 			isAIGenerated: z.boolean(),
