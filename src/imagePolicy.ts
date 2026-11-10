@@ -109,6 +109,19 @@ export const IMAGE_POLICY = {
       "aspectRatio": 3,
       "recommendedWidth": 1600,
       "recommendedHeight": 534
+    },
+    "comic-page-art": {
+      "maxBytes": 5242880,
+      "allowedTypes": [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+      ],
+      "maxWidth": 8192,
+      "maxHeight": 20000,
+      "aspectRatio": null,
+      "recommendedWidth": null,
+      "recommendedHeight": null
     }
   }
 } as const

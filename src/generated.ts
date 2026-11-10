@@ -207,6 +207,98 @@ export type AuthorBlogMutationInput = {
   entries?: JsonValue | null | undefined;
 };
 
+export type AuthorComicCreateInput = {
+  title: string;
+  description: string;
+  /** manga, webtoon or comic. Sets the reading direction: right to left, vertical, left to right. */
+  format: string;
+  /**
+   * lu-e or lu-ne (Literary Universe licenses, whose pages are always stored
+   * securely), or a Creative Commons license: cc-by, cc-by-sa, cc-by-nd, cc-by-nc,
+   * cc-by-nc-sa, cc-by-nc-nd or cc0.
+   */
+  license: string;
+  /** Defaults to the comic's original language, en. */
+  language?: string | null | undefined;
+  rating?: string | null | undefined;
+  genres?: Array<string> | null | undefined;
+  tags?: Array<string> | null | undefined;
+  contentWarnings?: Array<string> | null | undefined;
+  /** A universe you edit. */
+  universeId?: string | number | null | undefined;
+  /** Your stories this comic adapts. */
+  relatedStoryIds?: Array<string | number> | null | undefined;
+  slug?: string | null | undefined;
+  isAIGenerated?: boolean | null | undefined;
+  aiModel?: string | null | undefined;
+};
+
+export type AuthorComicUpdateInput = {
+  title?: string | null | undefined;
+  description?: string | null | undefined;
+  format?: string | null | undefined;
+  rating?: string | null | undefined;
+  genres?: Array<string> | null | undefined;
+  tags?: Array<string> | null | undefined;
+  contentWarnings?: Array<string> | null | undefined;
+  language?: string | null | undefined;
+  isAIGenerated?: boolean | null | undefined;
+  aiModel?: string | null | undefined;
+};
+
+export type AuthorComicChapterCreateInput = {
+  comicId: string | number;
+  /** Defaults to Prolog or Chapter N in the comic's language. */
+  title?: string | null | undefined;
+};
+
+export type AuthorComicChapterUpdateInput = {
+  title?: string | null | undefined;
+  isAIGenerated?: boolean | null | undefined;
+  aiModel?: string | null | undefined;
+};
+
+export type AuthorComicPageInput = {
+  /** fileId of a comic-page-art image uploaded to this chapter. */
+  fileId: string | number;
+  /** What the page shows, for readers using assistive technology. */
+  altText?: string | null | undefined;
+};
+
+export type AuthorComicLayerItemInput = {
+  /** Keep an item's id to update it in place. */
+  id?: string | null | undefined;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  order?: number | null | undefined;
+  rotation?: number | null | undefined;
+  text?: string | null | undefined;
+  fontFamily?: string | null | undefined;
+  fontSize?: number | null | undefined;
+  color?: string | null | undefined;
+  bold?: boolean | null | undefined;
+  italic?: boolean | null | undefined;
+  underline?: boolean | null | undefined;
+  /** horizontal-tb or vertical-rl. */
+  writingMode?: string | null | undefined;
+  label?: string | null | undefined;
+  /** Encyclopedia layers: the entry the hotspot opens. */
+  entryType?: string | null | undefined;
+  entryId?: string | number | null | undefined;
+};
+
+export type AuthorComicLayerCreateInput = {
+  pageId: string | number;
+  /** text, sfx or encyclopedia. */
+  kind: string;
+  /** Required for text and sfx layers, which belong to one language. */
+  language?: string | null | undefined;
+  order?: number | null | undefined;
+  items: Array<AuthorComicLayerItemInput>;
+};
+
 export type LuIdentityQueryVariables = Exact<{ [key: string]: never; }>;
 
 
@@ -473,6 +565,151 @@ export type LuMutateBlogMutationVariables = Exact<{
 
 export type LuMutateBlogMutation = { result: { id: string, version: string, data: JsonValue } };
 
+export type LuComicsQueryVariables = Exact<{
+  first?: number | null | undefined;
+  after?: string | null | undefined;
+}>;
+
+
+export type LuComicsQuery = { result: { nodes: Array<{ id: string, title: string, slug: string, description: string, format: string, language: string, license: string, rating: string | null, genres: Array<string>, tags: Array<string>, contentWarnings: Array<string>, universeId: string | null, organizationId: string | null, relatedStoryIds: Array<string>, coverUrl: string | null, isAIGenerated: boolean, aiModel: string | null, chaptersCount: number, pageCountTotal: number, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+
+export type LuComicQueryVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type LuComicQuery = { result: { id: string, title: string, slug: string, description: string, format: string, language: string, license: string, rating: string | null, genres: Array<string>, tags: Array<string>, contentWarnings: Array<string>, universeId: string | null, organizationId: string | null, relatedStoryIds: Array<string>, coverUrl: string | null, isAIGenerated: boolean, aiModel: string | null, chaptersCount: number, pageCountTotal: number, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null } | null };
+
+export type LuComicChaptersQueryVariables = Exact<{
+  comicId: string | number;
+}>;
+
+
+export type LuComicChaptersQuery = { result: Array<{ id: string, comicId: string, sequence: number, title: string, language: string, parentChapterId: string | null, pageCount: number, isAIGenerated: boolean, aiModel: string | null, publishedAt: string | null, updatedAt: string | null }> };
+
+export type LuComicPagesQueryVariables = Exact<{
+  chapterId: string | number;
+}>;
+
+
+export type LuComicPagesQuery = { result: Array<{ id: string, chapterId: string, sequence: number, storageMode: string, imageUrl: string | null, width: number | null, height: number | null, altText: string | null, layers: Array<{ id: string, pageId: string, kind: string, scope: string, language: string | null, order: number, items: JsonValue, hasImage: boolean }> }> };
+
+export type LuCreateComicMutationVariables = Exact<{
+  input: AuthorComicCreateInput;
+}>;
+
+
+export type LuCreateComicMutation = { result: { id: string, title: string, slug: string, description: string, format: string, language: string, license: string, rating: string | null, genres: Array<string>, tags: Array<string>, contentWarnings: Array<string>, universeId: string | null, organizationId: string | null, relatedStoryIds: Array<string>, coverUrl: string | null, isAIGenerated: boolean, aiModel: string | null, chaptersCount: number, pageCountTotal: number, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null } };
+
+export type LuUpdateComicMutationVariables = Exact<{
+  id: string | number;
+  input: AuthorComicUpdateInput;
+}>;
+
+
+export type LuUpdateComicMutation = { result: { id: string, title: string, slug: string, description: string, format: string, language: string, license: string, rating: string | null, genres: Array<string>, tags: Array<string>, contentWarnings: Array<string>, universeId: string | null, organizationId: string | null, relatedStoryIds: Array<string>, coverUrl: string | null, isAIGenerated: boolean, aiModel: string | null, chaptersCount: number, pageCountTotal: number, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null } };
+
+export type LuCreateComicChapterMutationVariables = Exact<{
+  input: AuthorComicChapterCreateInput;
+}>;
+
+
+export type LuCreateComicChapterMutation = { result: { id: string, comicId: string, sequence: number, title: string, language: string, parentChapterId: string | null, pageCount: number, isAIGenerated: boolean, aiModel: string | null, publishedAt: string | null, updatedAt: string | null } };
+
+export type LuUpdateComicChapterMutationVariables = Exact<{
+  id: string | number;
+  input: AuthorComicChapterUpdateInput;
+}>;
+
+
+export type LuUpdateComicChapterMutation = { result: { id: string, comicId: string, sequence: number, title: string, language: string, parentChapterId: string | null, pageCount: number, isAIGenerated: boolean, aiModel: string | null, publishedAt: string | null, updatedAt: string | null } };
+
+export type LuReorderComicChaptersMutationVariables = Exact<{
+  comicId: string | number;
+  chapterIds: Array<string | number> | string | number;
+}>;
+
+
+export type LuReorderComicChaptersMutation = { result: Array<{ id: string, comicId: string, sequence: number, title: string, language: string, parentChapterId: string | null, pageCount: number, isAIGenerated: boolean, aiModel: string | null, publishedAt: string | null, updatedAt: string | null }> };
+
+export type LuRemoveComicChapterMutationVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type LuRemoveComicChapterMutation = { result: { id: string } };
+
+export type LuAddComicPagesMutationVariables = Exact<{
+  chapterId: string | number;
+  pages: Array<AuthorComicPageInput> | AuthorComicPageInput;
+}>;
+
+
+export type LuAddComicPagesMutation = { result: Array<{ id: string, chapterId: string, sequence: number, storageMode: string, imageUrl: string | null, width: number | null, height: number | null, altText: string | null, layers: Array<{ id: string, pageId: string, kind: string, scope: string, language: string | null, order: number, items: JsonValue, hasImage: boolean }> }> };
+
+export type LuUpdateComicPageMutationVariables = Exact<{
+  id: string | number;
+  altText: string;
+}>;
+
+
+export type LuUpdateComicPageMutation = { result: { id: string, chapterId: string, sequence: number, storageMode: string, imageUrl: string | null, width: number | null, height: number | null, altText: string | null, layers: Array<{ id: string, pageId: string, kind: string, scope: string, language: string | null, order: number, items: JsonValue, hasImage: boolean }> } };
+
+export type LuReplaceComicPageImageMutationVariables = Exact<{
+  id: string | number;
+  fileId: string | number;
+}>;
+
+
+export type LuReplaceComicPageImageMutation = { result: { id: string, chapterId: string, sequence: number, storageMode: string, imageUrl: string | null, width: number | null, height: number | null, altText: string | null, layers: Array<{ id: string, pageId: string, kind: string, scope: string, language: string | null, order: number, items: JsonValue, hasImage: boolean }> } };
+
+export type LuReorderComicPagesMutationVariables = Exact<{
+  chapterId: string | number;
+  pageIds: Array<string | number> | string | number;
+}>;
+
+
+export type LuReorderComicPagesMutation = { result: Array<{ id: string, chapterId: string, sequence: number, storageMode: string, imageUrl: string | null, width: number | null, height: number | null, altText: string | null, layers: Array<{ id: string, pageId: string, kind: string, scope: string, language: string | null, order: number, items: JsonValue, hasImage: boolean }> }> };
+
+export type LuRemoveComicPageMutationVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type LuRemoveComicPageMutation = { result: { id: string } };
+
+export type LuCreateComicLayerMutationVariables = Exact<{
+  input: AuthorComicLayerCreateInput;
+}>;
+
+
+export type LuCreateComicLayerMutation = { result: { id: string, pageId: string, kind: string, scope: string, language: string | null, order: number, items: JsonValue, hasImage: boolean } };
+
+export type LuUpdateComicLayerMutationVariables = Exact<{
+  id: string | number;
+  order?: number | null | undefined;
+  items?: Array<AuthorComicLayerItemInput> | AuthorComicLayerItemInput | null | undefined;
+}>;
+
+
+export type LuUpdateComicLayerMutation = { result: { id: string, pageId: string, kind: string, scope: string, language: string | null, order: number, items: JsonValue, hasImage: boolean } };
+
+export type LuRemoveComicLayerMutationVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type LuRemoveComicLayerMutation = { result: { id: string } };
+
+export type LuPublishComicChapterMutationVariables = Exact<{
+  id: string | number;
+  publishAt?: string | null | undefined;
+  audience?: AuthorPublicationAudience | null | undefined;
+}>;
+
+
+export type LuPublishComicChapterMutation = { result: { id: string, comicId: string, sequence: number, title: string, language: string, parentChapterId: string | null, pageCount: number, isAIGenerated: boolean, aiModel: string | null, publishedAt: string | null, updatedAt: string | null } };
+
 export const LuIdentityDocument = "query LuIdentity {\n  result: apiIdentity {\n    version\n    kind\n    userId\n    organizationId\n    credentialId\n    scopes\n    expiresAt\n    resourceRestrictions {\n      universeIds\n      storyIds\n    }\n    deploymentUrl\n    environment\n    limits {\n      defaultPageSize\n      maxPageSize\n      maxRequestBytes\n      maxDraftBytes\n      maxResponseBytes\n    }\n  }\n}" as const
 export const LuStoryCreationOptionsDocument = "query LuStoryCreationOptions {\n  result: authorStoryCreationOptions {\n    languages\n    ratings\n    genres {\n      value\n      name\n    }\n    licenses {\n      value\n      name\n      description\n    }\n  }\n}" as const
 export const LuCreateStoryDocument = "mutation LuCreateStory($input: AuthorStoryCreateInput!) {\n  result: createAuthorStory(input: $input) {\n    id\n    slug\n  }\n}" as const
@@ -509,3 +746,22 @@ export const LuImagePolicyDocument = "query LuImagePolicy {\n  result: authorIma
 export const LuBlogPagesDocument = "query LuBlogPages($blogId: ID!, $first: Int, $after: ID) {\n  result: authorBlogPages(blogId: $blogId, first: $first, after: $after) {\n    id\n    version\n    data\n  }\n}" as const
 export const LuBlogMenusDocument = "query LuBlogMenus($blogId: ID!) {\n  result: authorBlogMenus(blogId: $blogId) {\n    id\n    version\n    data\n  }\n}" as const
 export const LuMutateBlogDocument = "mutation LuMutateBlog($input: AuthorBlogMutationInput!) {\n  result: mutateAuthorBlog(input: $input) {\n    id\n    version\n    data\n  }\n}" as const
+export const LuComicsDocument = "query LuComics($first: Int, $after: String) {\n  result: authorComics(first: $first, after: $after) {\n    nodes {\n      id\n      title\n      slug\n      description\n      format\n      language\n      license\n      rating\n      genres\n      tags\n      contentWarnings\n      universeId\n      organizationId\n      relatedStoryIds\n      coverUrl\n      isAIGenerated\n      aiModel\n      chaptersCount\n      pageCountTotal\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
+export const LuComicDocument = "query LuComic($id: ID!) {\n  result: authorComic(id: $id) {\n    id\n    title\n    slug\n    description\n    format\n    language\n    license\n    rating\n    genres\n    tags\n    contentWarnings\n    universeId\n    organizationId\n    relatedStoryIds\n    coverUrl\n    isAIGenerated\n    aiModel\n    chaptersCount\n    pageCountTotal\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n  }\n}" as const
+export const LuComicChaptersDocument = "query LuComicChapters($comicId: ID!) {\n  result: authorComicChapters(comicId: $comicId) {\n    id\n    comicId\n    sequence\n    title\n    language\n    parentChapterId\n    pageCount\n    isAIGenerated\n    aiModel\n    publishedAt\n    updatedAt\n  }\n}" as const
+export const LuComicPagesDocument = "query LuComicPages($chapterId: ID!) {\n  result: authorComicPages(chapterId: $chapterId) {\n    id\n    chapterId\n    sequence\n    storageMode\n    imageUrl\n    width\n    height\n    altText\n    layers {\n      id\n      pageId\n      kind\n      scope\n      language\n      order\n      items\n      hasImage\n    }\n  }\n}" as const
+export const LuCreateComicDocument = "mutation LuCreateComic($input: AuthorComicCreateInput!) {\n  result: createAuthorComic(input: $input) {\n    id\n    title\n    slug\n    description\n    format\n    language\n    license\n    rating\n    genres\n    tags\n    contentWarnings\n    universeId\n    organizationId\n    relatedStoryIds\n    coverUrl\n    isAIGenerated\n    aiModel\n    chaptersCount\n    pageCountTotal\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n  }\n}" as const
+export const LuUpdateComicDocument = "mutation LuUpdateComic($id: ID!, $input: AuthorComicUpdateInput!) {\n  result: updateAuthorComic(id: $id, input: $input) {\n    id\n    title\n    slug\n    description\n    format\n    language\n    license\n    rating\n    genres\n    tags\n    contentWarnings\n    universeId\n    organizationId\n    relatedStoryIds\n    coverUrl\n    isAIGenerated\n    aiModel\n    chaptersCount\n    pageCountTotal\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n  }\n}" as const
+export const LuCreateComicChapterDocument = "mutation LuCreateComicChapter($input: AuthorComicChapterCreateInput!) {\n  result: createAuthorComicChapter(input: $input) {\n    id\n    comicId\n    sequence\n    title\n    language\n    parentChapterId\n    pageCount\n    isAIGenerated\n    aiModel\n    publishedAt\n    updatedAt\n  }\n}" as const
+export const LuUpdateComicChapterDocument = "mutation LuUpdateComicChapter($id: ID!, $input: AuthorComicChapterUpdateInput!) {\n  result: updateAuthorComicChapter(id: $id, input: $input) {\n    id\n    comicId\n    sequence\n    title\n    language\n    parentChapterId\n    pageCount\n    isAIGenerated\n    aiModel\n    publishedAt\n    updatedAt\n  }\n}" as const
+export const LuReorderComicChaptersDocument = "mutation LuReorderComicChapters($comicId: ID!, $chapterIds: [ID!]!) {\n  result: reorderAuthorComicChapters(comicId: $comicId, chapterIds: $chapterIds) {\n    id\n    comicId\n    sequence\n    title\n    language\n    parentChapterId\n    pageCount\n    isAIGenerated\n    aiModel\n    publishedAt\n    updatedAt\n  }\n}" as const
+export const LuRemoveComicChapterDocument = "mutation LuRemoveComicChapter($id: ID!) {\n  result: removeAuthorComicChapter(id: $id) {\n    id\n  }\n}" as const
+export const LuAddComicPagesDocument = "mutation LuAddComicPages($chapterId: ID!, $pages: [AuthorComicPageInput!]!) {\n  result: addAuthorComicPages(chapterId: $chapterId, pages: $pages) {\n    id\n    chapterId\n    sequence\n    storageMode\n    imageUrl\n    width\n    height\n    altText\n    layers {\n      id\n      pageId\n      kind\n      scope\n      language\n      order\n      items\n      hasImage\n    }\n  }\n}" as const
+export const LuUpdateComicPageDocument = "mutation LuUpdateComicPage($id: ID!, $altText: String!) {\n  result: updateAuthorComicPage(id: $id, altText: $altText) {\n    id\n    chapterId\n    sequence\n    storageMode\n    imageUrl\n    width\n    height\n    altText\n    layers {\n      id\n      pageId\n      kind\n      scope\n      language\n      order\n      items\n      hasImage\n    }\n  }\n}" as const
+export const LuReplaceComicPageImageDocument = "mutation LuReplaceComicPageImage($id: ID!, $fileId: ID!) {\n  result: replaceAuthorComicPageImage(id: $id, fileId: $fileId) {\n    id\n    chapterId\n    sequence\n    storageMode\n    imageUrl\n    width\n    height\n    altText\n    layers {\n      id\n      pageId\n      kind\n      scope\n      language\n      order\n      items\n      hasImage\n    }\n  }\n}" as const
+export const LuReorderComicPagesDocument = "mutation LuReorderComicPages($chapterId: ID!, $pageIds: [ID!]!) {\n  result: reorderAuthorComicPages(chapterId: $chapterId, pageIds: $pageIds) {\n    id\n    chapterId\n    sequence\n    storageMode\n    imageUrl\n    width\n    height\n    altText\n    layers {\n      id\n      pageId\n      kind\n      scope\n      language\n      order\n      items\n      hasImage\n    }\n  }\n}" as const
+export const LuRemoveComicPageDocument = "mutation LuRemoveComicPage($id: ID!) {\n  result: removeAuthorComicPage(id: $id) {\n    id\n  }\n}" as const
+export const LuCreateComicLayerDocument = "mutation LuCreateComicLayer($input: AuthorComicLayerCreateInput!) {\n  result: createAuthorComicLayer(input: $input) {\n    id\n    pageId\n    kind\n    scope\n    language\n    order\n    items\n    hasImage\n  }\n}" as const
+export const LuUpdateComicLayerDocument = "mutation LuUpdateComicLayer($id: ID!, $order: Int, $items: [AuthorComicLayerItemInput!]) {\n  result: updateAuthorComicLayer(id: $id, order: $order, items: $items) {\n    id\n    pageId\n    kind\n    scope\n    language\n    order\n    items\n    hasImage\n  }\n}" as const
+export const LuRemoveComicLayerDocument = "mutation LuRemoveComicLayer($id: ID!) {\n  result: removeAuthorComicLayer(id: $id) {\n    id\n  }\n}" as const
+export const LuPublishComicChapterDocument = "mutation LuPublishComicChapter($id: ID!, $publishAt: DateTime, $audience: AuthorPublicationAudience) {\n  result: publishAuthorComicChapter(\n    id: $id\n    publishAt: $publishAt\n    audience: $audience\n  ) {\n    id\n    comicId\n    sequence\n    title\n    language\n    parentChapterId\n    pageCount\n    isAIGenerated\n    aiModel\n    publishedAt\n    updatedAt\n  }\n}" as const

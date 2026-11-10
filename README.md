@@ -106,6 +106,43 @@ A translation is the universe's title and description in another language. Who m
 
 Writes are never retried, whatever `maxRetries` says: a lost response to an applied update would come back from a retry as a conflict. A resource-restricted credential can write to the universes it selects.
 
+## Comics
+
+Comics, manga and webtoons have their own scopes: `comic:read`, `comic:write` and `comic:publish`. Every call acts as a person: the comic's owner, an active collaborator, or an admin of its organization. Organization keys and keys restricted to selected works are refused with `FORBIDDEN` for now.
+
+| Method | Scope | Result |
+| --- | --- | --- |
+| `comics({first, after})` | `comic:read` | Paginated comics you create on |
+| `comic({id})` | `comic:read` | Format, language, license, rating, cover URL and counts |
+| `comicChapters({comicId})` | `comic:read` | Chapters in reading order; translation editions carry `parentChapterId` |
+| `comicPages({chapterId})` | `comic:read` | Draft pages in order, with their layers |
+| `createComic(input)` | `comic:write` | A new draft comic; not retried |
+| `updateComic({id, input})` | `comic:write` | The comic after the change |
+| `createComicChapter({comicId, title?})` | `comic:write` | A new draft chapter; not retried |
+| `updateComicChapter({id, input})`, `reorderComicChapters({comicId, chapterIds})`, `removeComicChapter({id})` | `comic:write` | Chapter structure, as for stories |
+| `addComicPages({chapterId, pages})` | `comic:write` | Appends uploaded `comic-page-art` images as pages, in order; not retried |
+| `updateComicPage({id, altText})`, `replaceComicPageImage({id, fileId})`, `reorderComicPages({chapterId, pageIds})`, `removeComicPage({id})` | `comic:write` | The page or pages after the change; image replacement is not retried |
+| `createComicLayer(input)`, `updateComicLayer({id, order?, items?})`, `removeComicLayer({id})` | `comic:write` | Text, sound-effect and encyclopedia layers |
+| `publishComicChapter({id, publishAt?, audience?})` | `comic:publish` | Publishes, schedules or beta-releases a chapter; not retried |
+
+To add pages, `uploadComicPages` from `/images` fits each image to the `comic-page-art` policy, uploads it to the chapter, and appends the uploads as pages in the given order. `uploadComicPageImage` uploads a single image and returns its `fileId`, which you can pass to `replaceComicPageImage` or `addComicPages`.
+
+```ts
+import { uploadComicPages } from '@literary-universe/sdk/images'
+
+const chapter = await client.createComicChapter({ comicId })
+const pages = await uploadComicPages(client, chapter.id, [
+  { bytes: await readFile('01.png'), altText: 'A rooftop at dawn' },
+  { bytes: await readFile('02.png') },
+])
+```
+
+A `comic-page-art` upload goes to the bucket the chapter requires, and its result says which in `storageMode`. Pages of free comics are `open` and get a public `url`. Pages of paid, organization-licensed or private comics are `secure`: they have no URL, and readers receive them through the media gate after an access check. An upload can only be attached to the chapter it was uploaded to, by the person who uploaded it. Pages do not get a phone-sized variant yet, so readers load the full image.
+
+Layer items are positioned in fractions of the page (`x`, `y`, `w`, `h` between 0 and 1). `text` and `sfx` layers belong to one language and carry `text` with optional styling (`fontFamily`, `fontSize`, `color`, `bold`, `italic`, `underline`, `rotation`, and `writingMode: 'vertical-rl'` for vertical Japanese or Chinese lettering). `encyclopedia` layers hold hotspots (`entryType`, `entryId`) that open entries of the comic's universe. Image overlay layers and translation editions are edited in the workshop. Set a comic cover with `setCover({ kind: 'comic', ... })`.
+
+Publishing works like chapters of a story. Publishing the first chapter for readers publishes the comic. A publish snapshots the draft pages, so publish a live chapter again to release later edits. A chapter needs at least one page (`FAILED_PRECONDITION`). Comic errors use the same codes as the rest of the API. `NOT_FOUND` also covers comics you cannot edit, and `FORBIDDEN` covers a plan without comics.
+
 ## Organization keys
 
 An organization admin creates organization keys in the organization's settings, on the API keys tab, which the organization's `api` add-on opens. With `organization:read` alone a key reads the organization's public catalogue as a guest, for display on another site. With work scopes (`story:read`, `story:write`, `story:publish`, `universe:read`, `universe:write`, `universe:translate`) it acts as the organization itself: it has an organization admin's rights over the stories and universes the organization owns, and over the stories set in those universes, and over nothing else. It keeps working when the admin who created it leaves; revoke it to stop it. `identity()` reports it as `ORGANIZATION_API_KEY` with its `organizationId` and no `userId`. What it creates is recorded under the owner of the work it writes into, and the audit log names the key.
@@ -397,9 +434,11 @@ blog post images use 16:9 with a consistent 1200×675 recommendation.
 uploadImage creates a public asset in LU's existing ImagesCollection/storage. It
 returns an ID, URL, digest, size and dimensions. It does not attach, replace or
 publish content. Use story:write for chapter images, universe:write for
-encyclopedia illustrations, and blog:write for blog assets. It refuses cover
-purposes: setCover replaces a story's (story:write) or universe's
-(universe:write) cover through `PUT /api/{stories,universes}/:id/cover`, which
+encyclopedia illustrations, blog:write for blog assets, and comic:write for
+comic pages (see [Comics](#comics)). It refuses cover
+purposes: setCover replaces a story's (story:write), universe's
+(universe:write) or comic's (comic:write) cover through
+`PUT /api/{stories,universes,comics}/:id/cover`, which
 crops to the cover shape and stores WebP. It takes no operation ID; retrying sets
 the same cover again. Prepare with the cover purposes to stay within 5 MiB.
 Current target capabilities, course rules, plan restrictions and selected-resource
@@ -492,8 +531,11 @@ Tools are grouped in categories; `tools` selects categories and/or tool names
 `get-chapter-draft`), `stories-write` (`save-chapter-draft`, `create-chapter`,
 `update-story`, `set-story-visibility`, `rename-chapter`, `reorder-chapters`,
 `remove-chapter`), `publish` (`publish-chapter`, which does nothing without
-`confirm: true`), `universes`, `universes-write`, `images` (`set-cover` only with
-`readLocalFile`) and `docs` (`search-lu-docs`, `fetch-lu-docs`, usable without
+`confirm: true`, and `publish-comic-chapter`), `universes`, `universes-write`,
+`comics` (`list-comics`, `get-comic`, `list-comic-chapters`, `list-comic-pages`),
+`comics-write` (comic, chapter, page and layer writes; `upload-comic-pages` and
+`replace-comic-page-image` take local paths, are registered only with
+`readLocalFile`, and need the optional `sharp` peer), `images` (`set-cover` only with `readLocalFile`) and `docs` (`search-lu-docs`, `fetch-lu-docs`, usable without
 login; they read the site's `llms.txt` pages and help articles under `docsBaseUrl`). `selectTools`
 validates a selection without a server. Every tool carries a title, a zod input
 schema and the four MCP annotations; results carry `structuredContent` and a

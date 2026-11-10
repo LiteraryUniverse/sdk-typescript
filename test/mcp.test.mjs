@@ -4,6 +4,7 @@ import test from 'node:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import sharp from 'sharp'
 import { LiteraryUniverseClient } from '../dist/esm/index.js'
 import {
 	DEFAULT_TOOL_SELECTION,
@@ -70,7 +71,10 @@ test('selectTools expands categories and names, dedupes, and rejects unknown ent
 	assert.ok(defaults.includes('save-chapter-draft'))
 	assert.ok(!defaults.includes('publish-chapter'))
 	assert.deepEqual(selectTools(DEFAULT_TOOL_SELECTION), defaults)
-	assert.deepEqual(selectTools(['publish']), ['publish-chapter'])
+	assert.deepEqual(selectTools(['publish']), [
+		'publish-chapter',
+		'publish-comic-chapter',
+	])
 	assert.deepEqual(selectTools(['get-story', 'stories']), [
 		'get-story',
 		'list-stories',
@@ -79,7 +83,7 @@ test('selectTools expands categories and names, dedupes, and rejects unknown ent
 	])
 	const all = selectTools(['all'])
 	assert.equal(all.length, Object.values(TOOL_CATEGORIES).flat().length)
-	assert.equal(all.length, 33)
+	assert.equal(all.length, 52)
 	assert.throws(() => selectTools(['nope']), {
 		code: 'INVALID_CONFIGURATION',
 		message: 'Unknown tool or category: nope',
@@ -93,7 +97,7 @@ test('every registered tool carries a title and all four annotation hints', asyn
 		readLocalFile: async () => new Uint8Array([1]),
 	})
 	const { tools } = await client.listTools()
-	assert.equal(tools.length, 33)
+	assert.equal(tools.length, 52)
 	assert.deepEqual(
 		tools.map((tool) => tool.name).sort(),
 		[...registered].sort(),
@@ -339,7 +343,10 @@ test('fetch-lu-docs reads only llms.txt pages and help articles of the docs orig
 test('the CommonJS build exposes the same MCP entry', () => {
 	const mcp = createRequire(import.meta.url)('../dist/cjs/mcp.js')
 	assert.equal(typeof mcp.registerLiteraryUniverseTools, 'function')
-	assert.deepEqual(mcp.selectTools(['publish']), ['publish-chapter'])
+	assert.deepEqual(mcp.selectTools(['publish']), [
+		'publish-chapter',
+		'publish-comic-chapter',
+	])
 })
 
 test('inherited object names are rejected as tool selections', () => {
@@ -405,4 +412,73 @@ test('docs fetch supports a Response polyfill without a body stream', async () =
 	})
 	const result = await call('fetch-lu-docs', { url: '/story/llms.txt' })
 	assert.equal(result.content[0].text, 'Polyfilled docs')
+})
+
+test('upload-comic-pages fits each local page to policy, uploads it to the chapter and appends them in order', async () => {
+	const without = await connect({ tools: ['comics-write'] })
+	assert.ok(!without.registered.includes('upload-comic-pages'))
+	const png = await sharp({
+		create: { width: 900, height: 1400, channels: 3, background: '#335' },
+	})
+		.png()
+		.toBuffer()
+	const read = []
+	let uploads = 0
+	const { call, sent } = await connect(
+		{
+			tools: ['comics-write'],
+			readLocalFile: async (path) => {
+				assert.equal(uploads, read.length, 'upload each page before reading the next')
+				read.push(path)
+				return new Uint8Array(png)
+			},
+		},
+		(request) =>
+			request.url
+				? Response.json(
+						{ data: { result: { fileId: `file-${++uploads}` } } },
+						{ status: 201 },
+					)
+				: Response.json({
+						data: {
+							result: request.variables.pages.map((page, sequence) => ({
+								id: `page-${sequence}`,
+								sequence,
+							})),
+						},
+					}),
+	)
+	const result = await call('upload-comic-pages', {
+		chapterId: 'chapter',
+		pages: [
+			{ path: '/art/01.png', altText: 'A rooftop' },
+			{ path: '/art/02.png' },
+		],
+	})
+	assert.equal(result.isError, undefined)
+	assert.deepEqual(read, ['/art/01.png', '/art/02.png'])
+	const [first, second, attach] = sent
+	for (const upload of [first, second]) {
+		const url = new URL(upload.url)
+		assert.equal(url.pathname, '/api/author/images')
+		assert.equal(url.searchParams.get('purpose'), 'comic-page-art')
+		assert.equal(url.searchParams.get('targetId'), 'chapter')
+		assert.match(url.searchParams.get('operationId'), /^[0-9a-f-]{36}$/)
+	}
+	assert.equal(attach.operationName, 'LuAddComicPages')
+	assert.deepEqual(attach.variables, {
+		chapterId: 'chapter',
+		pages: [{ fileId: 'file-1', altText: 'A rooftop' }, { fileId: 'file-2' }],
+	})
+	assert.equal(result.structuredContent.pages.length, 2)
+})
+
+test('publish-comic-chapter without confirm echoes the request and sends nothing', async () => {
+	const { call, sent } = await connect({ tools: ['publish'] })
+	const result = await call('publish-comic-chapter', { id: 'chapter' })
+	assert.equal(sent.length, 0)
+	assert.deepEqual(result.structuredContent, {
+		published: false,
+		wouldPublish: { id: 'chapter', audience: 'READERS' },
+	})
 })

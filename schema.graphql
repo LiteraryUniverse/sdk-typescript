@@ -83,6 +83,14 @@ type Query {
   authorSeries(universeId: ID!): [AuthorSeries!]!
   authorBlogPages(blogId: ID!, first: Int = 25, after: ID): [AuthorBlogDocument!]!
   authorBlogMenus(blogId: ID!): [AuthorBlogDocument!]!
+  authorComics(first: Int = 25, after: String): AuthorComicConnection!
+  authorComic(id: ID!): AuthorComic
+
+  """Original chapters and translation editions, in reading order."""
+  authorComicChapters(comicId: ID!): [AuthorComicChapter!]!
+
+  """A chapter's draft pages in order, with their layers."""
+  authorComicPages(chapterId: ID!): [AuthorComicPage!]!
 }
 
 type AuthorCreationChoice {
@@ -202,6 +210,51 @@ type Mutation {
   """
   updateAuthorStory(storyId: ID!, input: AuthorStoryUpdateInput!): AuthorStoryHeader!
   mutateAuthorBlog(input: AuthorBlogMutationInput!): AuthorBlogDocument!
+
+  """Create a draft comic owned by the credential's person. Not idempotent."""
+  createAuthorComic(input: AuthorComicCreateInput!): AuthorComic!
+
+  """Change the given fields; the rating and license stay with the owner."""
+  updateAuthorComic(id: ID!, input: AuthorComicUpdateInput!): AuthorComic!
+
+  """Append a draft chapter. Not idempotent."""
+  createAuthorComicChapter(input: AuthorComicChapterCreateInput!): AuthorComicChapter!
+  updateAuthorComicChapter(id: ID!, input: AuthorComicChapterUpdateInput!): AuthorComicChapter!
+
+  """Name every original chapter of the comic exactly once."""
+  reorderAuthorComicChapters(comicId: ID!, chapterIds: [ID!]!): [AuthorComicChapter!]!
+
+  """Remove a chapter that never went live, with its pages and layers."""
+  removeAuthorComicChapter(id: ID!): AuthorComicDeletion!
+
+  """
+  Append uploaded images to a chapter as pages, in the given order, up to 300
+  at once. Not idempotent: a repeat appends the pages again.
+  """
+  addAuthorComicPages(chapterId: ID!, pages: [AuthorComicPageInput!]!): [AuthorComicPage!]!
+  updateAuthorComicPage(id: ID!, altText: String!): AuthorComicPage!
+
+  """Swap a page's art for another image uploaded to its chapter."""
+  replaceAuthorComicPageImage(id: ID!, fileId: ID!): AuthorComicPage!
+
+  """Name every page of the chapter exactly once."""
+  reorderAuthorComicPages(chapterId: ID!, pageIds: [ID!]!): [AuthorComicPage!]!
+  removeAuthorComicPage(id: ID!): AuthorComicDeletion!
+
+  """Add a layer of positioned items, such as speech bubbles, to a page."""
+  createAuthorComicLayer(input: AuthorComicLayerCreateInput!): AuthorComicLayer!
+
+  """Replace a layer's items and/or change its stacking order."""
+  updateAuthorComicLayer(id: ID!, order: Int, items: [AuthorComicLayerItemInput!]): AuthorComicLayer!
+  removeAuthorComicLayer(id: ID!): AuthorComicDeletion!
+
+  """
+  Publish a chapter now, schedule it with publishAt, or send it to beta
+  readers with audience BETA. Every publish snapshots the draft pages; publish
+  a live chapter again to release later edits. The first chapter's publish
+  also publishes the comic.
+  """
+  publishAuthorComicChapter(id: ID!, publishAt: DateTime, audience: AuthorPublicationAudience = READERS): AuthorComicChapter!
 }
 
 enum AuthorWorkState {
@@ -692,6 +745,209 @@ input AuthorBlogMutationInput {
   items: [JSON!]
   settings: JSON
   entries: JSON
+}
+
+"""
+A comic, manga or webtoon the credential's person creates on: its owner, an
+active collaborator, or an admin of its organization.
+"""
+type AuthorComic {
+  id: ID!
+  title: String!
+  slug: String!
+  description: String!
+
+  """manga, webtoon or comic."""
+  format: String!
+  language: String!
+  license: String!
+  rating: String
+  genres: [String!]!
+  tags: [String!]!
+  contentWarnings: [String!]!
+  universeId: ID
+  organizationId: ID
+  relatedStoryIds: [ID!]!
+  coverUrl: String
+  isAIGenerated: Boolean!
+  aiModel: String
+  chaptersCount: Int!
+  pageCountTotal: Int!
+  createdAt: DateTime
+  updatedAt: DateTime
+  publishedAt: DateTime
+  privateAt: DateTime
+}
+
+type AuthorComicConnection {
+  nodes: [AuthorComic!]!
+  pageInfo: AuthorPageInfo!
+}
+
+type AuthorComicChapter {
+  id: ID!
+  comicId: ID!
+  sequence: Int!
+  title: String!
+  language: String!
+
+  """Set on a translation edition with its own page art."""
+  parentChapterId: ID
+  pageCount: Int!
+  isAIGenerated: Boolean!
+  aiModel: String
+
+  """In the future while the chapter is scheduled."""
+  publishedAt: DateTime
+  updatedAt: DateTime
+}
+
+type AuthorComicLayer {
+  id: ID!
+  pageId: ID!
+
+  """art, sfx, text or encyclopedia."""
+  kind: String!
+
+  """localized layers belong to one language; static ones to every edition."""
+  scope: String!
+  language: String
+  order: Int!
+
+  """
+  Positioned items. x, y, w and h are fractions of the page between 0 and 1;
+  text items carry text and optional fontFamily, fontSize, color, bold,
+  italic, underline, rotation and writingMode.
+  """
+  items: JSON!
+
+  """An image overlay layer; edit those in the workshop."""
+  hasImage: Boolean!
+}
+
+type AuthorComicPage {
+  id: ID!
+  chapterId: ID!
+  sequence: Int!
+
+  """
+  open pages have a public imageUrl; secure ones are served only to readers with access.
+  """
+  storageMode: String!
+  imageUrl: String
+  width: Int
+  height: Int
+  altText: String
+  layers: [AuthorComicLayer!]!
+}
+
+type AuthorComicDeletion {
+  id: ID!
+}
+
+input AuthorComicCreateInput {
+  title: String!
+  description: String!
+
+  """
+  manga, webtoon or comic. Sets the reading direction: right to left, vertical, left to right.
+  """
+  format: String!
+
+  """
+  lu-e or lu-ne (Literary Universe licenses, whose pages are always stored
+  securely), or a Creative Commons license: cc-by, cc-by-sa, cc-by-nd, cc-by-nc,
+  cc-by-nc-sa, cc-by-nc-nd or cc0.
+  """
+  license: String!
+
+  """Defaults to the comic's original language, en."""
+  language: Locale
+  rating: String
+  genres: [String!]
+  tags: [String!]
+  contentWarnings: [String!]
+
+  """A universe you edit."""
+  universeId: ID
+
+  """Your stories this comic adapts."""
+  relatedStoryIds: [ID!]
+  slug: String
+  isAIGenerated: Boolean
+  aiModel: String
+}
+
+input AuthorComicUpdateInput {
+  title: String
+  description: String
+  format: String
+  rating: String
+  genres: [String!]
+  tags: [String!]
+  contentWarnings: [String!]
+  language: Locale
+  isAIGenerated: Boolean
+  aiModel: String
+}
+
+input AuthorComicChapterCreateInput {
+  comicId: ID!
+
+  """Defaults to Prolog or Chapter N in the comic's language."""
+  title: String
+}
+
+input AuthorComicChapterUpdateInput {
+  title: String
+  isAIGenerated: Boolean
+  aiModel: String
+}
+
+input AuthorComicPageInput {
+  """fileId of a comic-page-art image uploaded to this chapter."""
+  fileId: ID!
+
+  """What the page shows, for readers using assistive technology."""
+  altText: String
+}
+
+input AuthorComicLayerItemInput {
+  """Keep an item's id to update it in place."""
+  id: String
+  x: Float!
+  y: Float!
+  w: Float!
+  h: Float!
+  order: Int
+  rotation: Float
+  text: String
+  fontFamily: String
+  fontSize: Float
+  color: String
+  bold: Boolean
+  italic: Boolean
+  underline: Boolean
+
+  """horizontal-tb or vertical-rl."""
+  writingMode: String
+  label: String
+
+  """Encyclopedia layers: the entry the hotspot opens."""
+  entryType: String
+  entryId: ID
+}
+
+input AuthorComicLayerCreateInput {
+  pageId: ID!
+
+  """text, sfx or encyclopedia."""
+  kind: String!
+
+  """Required for text and sfx layers, which belong to one language."""
+  language: Locale
+  order: Int
+  items: [AuthorComicLayerItemInput!]!
 }
 
 scalar Date

@@ -93,20 +93,28 @@ function globalLimits(policy: ImagePolicy) {
 		),
 	}
 }
-function purposeLimits(limits: ImagePolicy['purposes'][ImagePurpose]) {
+function purposeLimits(
+	limits: ImagePolicy['purposes'][ImagePurpose],
+	purpose: ImagePurpose,
+) {
 	validateOutputLimits(limits)
 	return {
 		...limits,
 		maxBytes: finiteLimit(limits.maxBytes, 5 * 1024 * 1024),
 		maxWidth: finiteLimit(limits.maxWidth, 8192),
-		maxHeight: finiteLimit(limits.maxHeight, 8192),
+		maxHeight: finiteLimit(
+			limits.maxHeight,
+			purpose === 'comic-page-art'
+				? IMAGE_POLICY.purposes['comic-page-art'].maxHeight
+				: 8192,
+		),
 	}
 }
 function preparationPolicy(
 	policy: ImagePolicy,
 	purpose: ImagePurpose,
 ): ImagePolicy {
-	const limits = purposeLimits(selectedPolicy(policy, purpose))
+	const limits = purposeLimits(selectedPolicy(policy, purpose), purpose)
 	return {
 		...policy,
 		...globalLimits(policy),
