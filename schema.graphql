@@ -59,6 +59,8 @@ type ApiIdentity {
 }
 
 type Query {
+  authorStoryCreationOptions: AuthorStoryCreationOptions!
+
   """
   Deployment and this credential's grants. Does not enumerate other users or organizations.
   """
@@ -91,112 +93,40 @@ type Query {
   authorComicPages(chapterId: ID!): [AuthorComicPage!]!
 }
 
-enum AuthorWorkState {
-  DRAFT
-  SCHEDULED
-  PUBLISHED
+type AuthorCreationChoice {
+  value: String!
+  name: String!
+  description: String
 }
 
-type AuthorPageInfo {
-  endCursor: String
-  hasNextPage: Boolean!
+type AuthorStoryCreationOptions {
+  languages: [String!]!
+  ratings: [String!]!
+  genres: [AuthorCreationChoice!]!
+  licenses: [AuthorCreationChoice!]!
 }
 
-type AuthorStoryHeader {
-  id: ID!
+input AuthorStoryCreateInput {
   title: String!
-  slug: String
+  slug: String!
+  description: String!
   language: Locale!
+  genres: [String!]!
+  rating: String!
+  license: String!
+  isAIGenerated: Boolean!
+  aiModel: String
   universeId: ID
-  organizationId: ID
-  createdAt: DateTime
-  updatedAt: DateTime
-  publishedAt: DateTime
-  privateAt: DateTime
-  state: AuthorWorkState!
 }
 
-type AuthorStoryConnection {
-  nodes: [AuthorStoryHeader!]!
-  pageInfo: AuthorPageInfo!
-}
-
-type AuthorStory {
+type AuthorStoryCreated {
   id: ID!
-  title: String!
-  slug: String
-  language: Locale!
-  universeId: ID
-  organizationId: ID
-  createdAt: DateTime
-  updatedAt: DateTime
-  publishedAt: DateTime
-  privateAt: DateTime
-  state: AuthorWorkState!
-  description: String
-  authorsNotes: JSON
-}
-
-type AuthorUniverseHeader {
-  id: ID!
-  title: String!
-  slug: String
-  language: Locale!
-  organizationId: ID
-  createdAt: DateTime
-  updatedAt: DateTime
-  publishedAt: DateTime
-  privateAt: DateTime
-  state: AuthorWorkState!
-}
-
-type AuthorUniverseConnection {
-  nodes: [AuthorUniverseHeader!]!
-  pageInfo: AuthorPageInfo!
-}
-
-type AuthorUniverse {
-  id: ID!
-  title: String!
-  slug: String
-  language: Locale!
-  organizationId: ID
-  createdAt: DateTime
-  updatedAt: DateTime
-  publishedAt: DateTime
-  privateAt: DateTime
-  state: AuthorWorkState!
-  description: String
-
-  """
-  Translations of the title and description, each with the revision a change must name.
-  """
-  translations: [AuthorUniverseTranslation!]!
-}
-
-type AuthorUniverseTranslation {
-  language: Locale!
-  title: String!
-  description: String
-
-  """Advances with every change; pass it as expectedRevision to update."""
-  revision: Int!
-}
-
-input AuthorUniverseTranslationInput {
-  title: String
-  description: String
-}
-
-type AuthorUniverseTranslationCreation {
-  """
-  False when the language already had a translation; it is returned unchanged.
-  """
-  created: Boolean!
-  translation: AuthorUniverseTranslation!
+  slug: String!
 }
 
 type Mutation {
+  createAuthorStory(input: AuthorStoryCreateInput!): AuthorStoryCreated!
+
   """
   Open a language for a universe. Title and description start as copies of the
   original unless given. Also opens the language for the universe's
@@ -325,6 +255,111 @@ type Mutation {
   also publishes the comic.
   """
   publishAuthorComicChapter(id: ID!, publishAt: DateTime, audience: AuthorPublicationAudience = READERS): AuthorComicChapter!
+}
+
+enum AuthorWorkState {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+}
+
+type AuthorPageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+}
+
+type AuthorStoryHeader {
+  id: ID!
+  title: String!
+  slug: String
+  language: Locale!
+  universeId: ID
+  organizationId: ID
+  createdAt: DateTime
+  updatedAt: DateTime
+  publishedAt: DateTime
+  privateAt: DateTime
+  state: AuthorWorkState!
+}
+
+type AuthorStoryConnection {
+  nodes: [AuthorStoryHeader!]!
+  pageInfo: AuthorPageInfo!
+}
+
+type AuthorStory {
+  id: ID!
+  title: String!
+  slug: String
+  language: Locale!
+  universeId: ID
+  organizationId: ID
+  createdAt: DateTime
+  updatedAt: DateTime
+  publishedAt: DateTime
+  privateAt: DateTime
+  state: AuthorWorkState!
+  description: String
+  authorsNotes: JSON
+}
+
+type AuthorUniverseHeader {
+  id: ID!
+  title: String!
+  slug: String
+  language: Locale!
+  organizationId: ID
+  createdAt: DateTime
+  updatedAt: DateTime
+  publishedAt: DateTime
+  privateAt: DateTime
+  state: AuthorWorkState!
+}
+
+type AuthorUniverseConnection {
+  nodes: [AuthorUniverseHeader!]!
+  pageInfo: AuthorPageInfo!
+}
+
+type AuthorUniverse {
+  id: ID!
+  title: String!
+  slug: String
+  language: Locale!
+  organizationId: ID
+  createdAt: DateTime
+  updatedAt: DateTime
+  publishedAt: DateTime
+  privateAt: DateTime
+  state: AuthorWorkState!
+  description: String
+
+  """
+  Translations of the title and description, each with the revision a change must name.
+  """
+  translations: [AuthorUniverseTranslation!]!
+}
+
+type AuthorUniverseTranslation {
+  language: Locale!
+  title: String!
+  description: String
+
+  """Advances with every change; pass it as expectedRevision to update."""
+  revision: Int!
+}
+
+input AuthorUniverseTranslationInput {
+  title: String
+  description: String
+}
+
+type AuthorUniverseTranslationCreation {
+  """
+  False when the language already had a translation; it is returned unchanged.
+  """
+  created: Boolean!
+  translation: AuthorUniverseTranslation!
 }
 
 type AuthorChapterHeader {
@@ -530,6 +565,12 @@ type AuthorEncyclopediaField {
   type: String!
   private: Boolean!
   text: String
+
+  """Whether an AI model wrote the text; readers see the disclosure."""
+  isAIGenerated: Boolean!
+
+  """The model named in the disclosure."""
+  aiModel: String
 }
 
 type AuthorEncyclopediaEntry {
@@ -549,6 +590,12 @@ type AuthorEncyclopediaEntry {
   parent: AuthorEncyclopediaLink
   related: [AuthorEncyclopediaLink!]!
   fields: [AuthorEncyclopediaField!]!
+
+  """Whether an AI model wrote the text; readers see the disclosure."""
+  isAIGenerated: Boolean!
+
+  """The model named in the disclosure."""
+  aiModel: String
 }
 
 """A field by its title; a new title adds a text field."""
@@ -577,6 +624,12 @@ input AuthorEncyclopediaEntryChangesInput {
   summary: String
   fields: [AuthorEncyclopediaTextFieldInput!]
   timeFields: [AuthorEncyclopediaTimeFieldInput!]
+
+  """
+  The AI model that wrote this text, such as claude-opus-5-5. Marks the entry
+  and the fields written here as AI-generated; readers see the disclosure.
+  """
+  aiModel: String
 }
 
 type AuthorEncyclopediaEntryDeletion {
@@ -597,6 +650,12 @@ input AuthorEncyclopediaEntryCreateInput {
   summary: String
   fields: [AuthorEncyclopediaTextFieldInput!]
   timeFields: [AuthorEncyclopediaTimeFieldInput!]
+
+  """
+  The AI model that wrote this text, such as claude-opus-5-5. Marks the entry
+  and the fields written here as AI-generated; readers see the disclosure.
+  """
+  aiModel: String
 }
 
 input AuthorEncyclopediaFieldTranslationInput {

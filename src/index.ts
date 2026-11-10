@@ -12,6 +12,7 @@ import {
 	type AuthorEncyclopediaEntryCreateInput,
 	type AuthorEncyclopediaEntryTranslationInput,
 	type AuthorSeriesSaveInput,
+	type AuthorStoryCreateInput,
 	LuAddComicPagesDocument,
 	type LuAddComicPagesMutation,
 	type LuAddComicPagesMutationVariables,
@@ -46,6 +47,8 @@ import {
 	type LuCreateComicMutation,
 	LuCreateEncyclopediaEntryDocument,
 	type LuCreateEncyclopediaEntryMutation,
+	LuCreateStoryDocument,
+	type LuCreateStoryMutation,
 	LuCreateUniverseTranslationDocument,
 	type LuCreateUniverseTranslationMutation,
 	type LuCreateUniverseTranslationMutationVariables,
@@ -117,6 +120,8 @@ import {
 	LuStoriesDocument,
 	type LuStoriesQuery,
 	type LuStoriesQueryVariables,
+	LuStoryCreationOptionsDocument,
+	type LuStoryCreationOptionsQuery,
 	LuStoryDocument,
 	type LuStoryQuery,
 	type LuStoryQueryVariables,
@@ -320,6 +325,25 @@ export class LiteraryUniverseClient {
 			)
 	}
 
+	storyCreationOptions(options?: RequestOptions) {
+		return this.read<LuStoryCreationOptionsQuery>(
+			LuStoryCreationOptionsDocument,
+			'LuStoryCreationOptions',
+			{},
+			options,
+		)
+	}
+	/** Creation is not retried: on a lost response, look up the chosen slug first. */
+	createStory(input: AuthorStoryCreateInput, options?: RequestOptions) {
+		return this.read<LuCreateStoryMutation>(
+			LuCreateStoryDocument,
+			'LuCreateStory',
+			{ input },
+			options,
+			undefined,
+			0,
+		)
+	}
 	identity(options?: RequestOptions) {
 		return this.read<LuIdentityQuery>(
 			LuIdentityDocument,

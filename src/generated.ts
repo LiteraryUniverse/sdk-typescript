@@ -9,6 +9,19 @@ export type ApiCredentialKind =
   | 'ORGANIZATION_API_KEY'
   | 'SESSION';
 
+export type AuthorStoryCreateInput = {
+  title: string;
+  slug: string;
+  description: string;
+  language: string;
+  genres: Array<string>;
+  rating: string;
+  license: string;
+  isAIGenerated: boolean;
+  aiModel?: string | null | undefined;
+  universeId?: string | number | null | undefined;
+};
+
 export type AuthorWorkState =
   | 'DRAFT'
   | 'SCHEDULED'
@@ -111,6 +124,11 @@ export type AuthorEncyclopediaEntryChangesInput = {
   summary?: string | null | undefined;
   fields?: Array<AuthorEncyclopediaTextFieldInput> | null | undefined;
   timeFields?: Array<AuthorEncyclopediaTimeFieldInput> | null | undefined;
+  /**
+   * The AI model that wrote this text, such as claude-opus-5-5. Marks the entry
+   * and the fields written here as AI-generated; readers see the disclosure.
+   */
+  aiModel?: string | null | undefined;
 };
 
 export type AuthorEncyclopediaEntryCreateInput = {
@@ -125,6 +143,11 @@ export type AuthorEncyclopediaEntryCreateInput = {
   summary?: string | null | undefined;
   fields?: Array<AuthorEncyclopediaTextFieldInput> | null | undefined;
   timeFields?: Array<AuthorEncyclopediaTimeFieldInput> | null | undefined;
+  /**
+   * The AI model that wrote this text, such as claude-opus-5-5. Marks the entry
+   * and the fields written here as AI-generated; readers see the disclosure.
+   */
+  aiModel?: string | null | undefined;
 };
 
 export type AuthorEncyclopediaFieldTranslationInput = {
@@ -280,6 +303,18 @@ export type LuIdentityQueryVariables = Exact<{ [key: string]: never; }>;
 
 
 export type LuIdentityQuery = { result: { version: string, kind: ApiCredentialKind, userId: string | null, organizationId: string | null, credentialId: string | null, scopes: Array<string>, expiresAt: string | null, deploymentUrl: string, environment: string, resourceRestrictions: { universeIds: Array<string>, storyIds: Array<string> } | null, limits: { defaultPageSize: number, maxPageSize: number, maxRequestBytes: number, maxDraftBytes: number, maxResponseBytes: number } } };
+
+export type LuStoryCreationOptionsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type LuStoryCreationOptionsQuery = { result: { languages: Array<string>, ratings: Array<string>, genres: Array<{ value: string, name: string }>, licenses: Array<{ value: string, name: string, description: string | null }> } };
+
+export type LuCreateStoryMutationVariables = Exact<{
+  input: AuthorStoryCreateInput;
+}>;
+
+
+export type LuCreateStoryMutation = { result: { id: string, slug: string } };
 
 export type LuProfileQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -676,6 +711,8 @@ export type LuPublishComicChapterMutationVariables = Exact<{
 export type LuPublishComicChapterMutation = { result: { id: string, comicId: string, sequence: number, title: string, language: string, parentChapterId: string | null, pageCount: number, isAIGenerated: boolean, aiModel: string | null, publishedAt: string | null, updatedAt: string | null } };
 
 export const LuIdentityDocument = "query LuIdentity {\n  result: apiIdentity {\n    version\n    kind\n    userId\n    organizationId\n    credentialId\n    scopes\n    expiresAt\n    resourceRestrictions {\n      universeIds\n      storyIds\n    }\n    deploymentUrl\n    environment\n    limits {\n      defaultPageSize\n      maxPageSize\n      maxRequestBytes\n      maxDraftBytes\n      maxResponseBytes\n    }\n  }\n}" as const
+export const LuStoryCreationOptionsDocument = "query LuStoryCreationOptions {\n  result: authorStoryCreationOptions {\n    languages\n    ratings\n    genres {\n      value\n      name\n    }\n    licenses {\n      value\n      name\n      description\n    }\n  }\n}" as const
+export const LuCreateStoryDocument = "mutation LuCreateStory($input: AuthorStoryCreateInput!) {\n  result: createAuthorStory(input: $input) {\n    id\n    slug\n  }\n}" as const
 export const LuProfileDocument = "query LuProfile {\n  result: apiIdentity {\n    userId\n    username\n  }\n}" as const
 export const LuStoriesDocument = "query LuStories($first: Int, $after: String) {\n  result: authorStories(first: $first, after: $after) {\n    nodes {\n      id\n      title\n      slug\n      language\n      universeId\n      organizationId\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n      state\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
 export const LuStoryDocument = "query LuStory($id: ID!) {\n  result: authorStory(id: $id) {\n    id\n    title\n    slug\n    language\n    universeId\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n    description\n    authorsNotes\n  }\n}" as const
