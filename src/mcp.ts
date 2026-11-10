@@ -508,12 +508,18 @@ const comicsWrite: Record<string, Spec> = {
 		annotations: CREATE,
 		run: async (client, { chapterId, pages }, options) => {
 			const { read, images } = readPages(options)
-			const files = []
+			const { uploadComicPageImage } = await images
+			const uploaded = []
 			for (const page of pages)
-				files.push({ bytes: await read(page.path), altText: page.altText })
-			return {
-				pages: await (await images).uploadComicPages(client, chapterId, files),
-			}
+				uploaded.push({
+					fileId: await uploadComicPageImage(
+						client,
+						chapterId,
+						await read(page.path),
+					),
+					altText: page.altText,
+				})
+			return { pages: await client.addComicPages({ chapterId, pages: uploaded }) }
 		},
 	}),
 	'replace-comic-page-image': tool({

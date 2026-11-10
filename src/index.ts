@@ -176,7 +176,8 @@ export type ImageUploadInput = {
 }
 export type UploadedImage = {
 	fileId: string
-	url: string
+	/** Public URL; omitted for secure comic pages. */
+	url?: string
 	purpose: ImagePurpose
 	targetId: string
 	width: number
@@ -695,7 +696,7 @@ export class LiteraryUniverseClient {
 			options,
 		)
 	}
-	/** Swaps a page's art for another `comic-page-art` upload of its chapter. */
+	/** Swaps a page's art for another `comic-page-art` upload of its chapter. Not retried: the upload is consumed. */
 	replaceComicPageImage(
 		input: LuReplaceComicPageImageMutationVariables,
 		options?: RequestOptions,
@@ -705,6 +706,8 @@ export class LiteraryUniverseClient {
 			'LuReplaceComicPageImage',
 			input,
 			options,
+			undefined,
+			0,
 		)
 	}
 	/** Puts every page of a chapter in the given order. */
@@ -872,7 +875,7 @@ export class LiteraryUniverseClient {
 		)) as unknown as ImagePolicy
 	}
 
-	/** Create a public image asset. Attaching it to content is a separate write. */
+	/** Upload an image asset; comic pages may be secure. Attaching it to content is a separate write. */
 	uploadImage(input: ImageUploadInput, options?: RequestOptions) {
 		const { bytes, type, purpose, targetId, operationId, policyVersion } = input
 		const metadata = { purpose, targetId, operationId, policyVersion }

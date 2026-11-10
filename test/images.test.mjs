@@ -128,3 +128,21 @@ test('cancels image preparation while its subprocess is running', async () => {
 	controller.abort()
 	await assert.rejects(prepared, { code: 'CANCELLED' })
 })
+
+test('preserves webtoon strips within the comic page policy and still bounds oversized strips', async () => {
+	const source = await sharp({
+		create: { width: 100, height: 20000, channels: 3, background: '#335577' },
+	}).png().toBuffer()
+	const prepared = await prepareImage(source, 'comic-page-art')
+	assert.equal(prepared.width, 100)
+	assert.equal(prepared.height, 20000)
+	assert.ok(!prepared.warnings.some((warning) => warning.code === 'RESIZED'))
+	const policy = structuredClone(IMAGE_POLICY)
+	policy.purposes['comic-page-art'].maxHeight = 30000
+	const taller = await sharp({
+		create: { width: 100, height: 25000, channels: 3, background: '#335577' },
+	}).png().toBuffer()
+	const bounded = await prepareImage(taller, 'comic-page-art', { policy })
+	assert.equal(bounded.height, 20000)
+	assert.equal(bounded.width, 80)
+})

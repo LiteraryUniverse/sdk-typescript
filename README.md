@@ -121,7 +121,7 @@ Comics, manga and webtoons have their own scopes: `comic:read`, `comic:write` an
 | `createComicChapter({comicId, title?})` | `comic:write` | A new draft chapter; not retried |
 | `updateComicChapter({id, input})`, `reorderComicChapters({comicId, chapterIds})`, `removeComicChapter({id})` | `comic:write` | Chapter structure, as for stories |
 | `addComicPages({chapterId, pages})` | `comic:write` | Appends uploaded `comic-page-art` images as pages, in order; not retried |
-| `updateComicPage({id, altText})`, `replaceComicPageImage({id, fileId})`, `reorderComicPages({chapterId, pageIds})`, `removeComicPage({id})` | `comic:write` | The page or pages after the change |
+| `updateComicPage({id, altText})`, `replaceComicPageImage({id, fileId})`, `reorderComicPages({chapterId, pageIds})`, `removeComicPage({id})` | `comic:write` | The page or pages after the change; image replacement is not retried |
 | `createComicLayer(input)`, `updateComicLayer({id, order?, items?})`, `removeComicLayer({id})` | `comic:write` | Text, sound-effect and encyclopedia layers |
 | `publishComicChapter({id, publishAt?, audience?})` | `comic:publish` | Publishes, schedules or beta-releases a chapter; not retried |
 

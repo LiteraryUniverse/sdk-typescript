@@ -400,6 +400,7 @@ test('upload-comic-pages fits each local page to policy, uploads it to the chapt
 		{
 			tools: ['comics-write'],
 			readLocalFile: async (path) => {
+				assert.equal(uploads, read.length, 'upload each page before reading the next')
 				read.push(path)
 				return new Uint8Array(png)
 			},

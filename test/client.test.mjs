@@ -870,3 +870,30 @@ test('blog readback preserves versions and mutation retries preserve the full re
 	assert.deepEqual(requests[2], requests[3])
 	assert.deepEqual(requests[3].variables, { input })
 })
+
+test('never retries comic image replacement after a lost response to an applied write', async () => {
+	let calls = 0
+	const client = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		maxRetries: 2,
+		fetch: async (_url, options) => {
+			calls++
+			const request = JSON.parse(options.body)
+			assert.equal(request.operationName, 'LuReplaceComicPageImage')
+			assert.deepEqual(request.variables, { id: 'page', fileId: 'upload' })
+			if (calls === 1) throw new TypeError('Response lost after applying replacement')
+			return Response.json({
+				errors: [{
+					message: 'Upload is already a page',
+					extensions: { code: 'BAD_USER_INPUT' },
+				}],
+			})
+		},
+	})
+	await assert.rejects(
+		client.replaceComicPageImage({ id: 'page', fileId: 'upload' }),
+		{ code: 'NETWORK_ERROR' },
+	)
+	assert.equal(calls, 1)
+})
