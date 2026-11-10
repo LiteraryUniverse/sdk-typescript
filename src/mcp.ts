@@ -143,6 +143,39 @@ const stories: Record<string, Spec> = {
 	}),
 }
 
+const creation: Record<string, Spec> = {
+	'get-story-creation-options': tool({
+		title: 'Get story creation choices',
+		description:
+			'Current supported languages, genres, age ratings and licenses. Read before asking the author for missing story creation details.',
+		input: {},
+		annotations: READ,
+		run: (client) => client.storyCreationOptions(),
+	}),
+	'create-story': tool({
+		title: 'Create a story draft',
+		description:
+			'Create an unpublished personal story after the author reviews its details. Ask for missing required fields using get-story-creation-options; never choose a license or AI disclosure for the author. This call is not automatically retried: after an uncertain response, find the slug in list-stories before retrying.',
+		input: {
+			title: z.string().min(1).max(100),
+			slug: z
+				.string()
+				.max(100)
+				.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+			description: z.string().min(1).max(800),
+			language: z.string().min(1),
+			genres: z.array(z.string()).min(1).max(2),
+			rating: z.string().min(1),
+			license: z.string().min(1),
+			isAIGenerated: z.boolean(),
+			aiModel: z.string().optional(),
+			universeId: id.optional(),
+		},
+		annotations: CREATE,
+		run: (client, args) => client.createStory(args),
+	}),
+}
+
 const bodyShape = {
 	markdown: z
 		.string()
@@ -158,7 +191,7 @@ const storiesWrite: Record<string, Spec> = {
 		description:
 			'Replace a chapter draft with markdown or content (exactly one). expectedVersion must be the version last read; a changed draft fails with VERSION_CONFLICT.',
 		input: { chapterId: id, expectedVersion: z.string(), ...saveShape },
-		annotations: WRITE,
+		annotations: hints(false, true, true),
 		run: async (client, { chapterId, content, ...args }) => {
 			const result = await client.saveDraft({
 				...args,
@@ -405,7 +438,8 @@ const universesWrite: Record<string, Spec> = {
 			fields: z.array(z.object(textField)).optional(),
 			timeFields: z.array(z.object(timeField)).optional(),
 		},
-		annotations: WRITE,
+		// Replaces existing values; hosts must offer overwrite approval.
+		annotations: hints(false, true, true),
 		run: (client, { id, ...changes }) =>
 			client.updateEncyclopediaEntry({ id, changes }),
 	}),
@@ -425,7 +459,8 @@ const universesWrite: Record<string, Spec> = {
 				)
 				.optional(),
 		},
-		annotations: WRITE,
+		// Can overwrite an existing translated edition.
+		annotations: hints(false, true, true),
 		run: (client, args) => client.translateEncyclopediaEntry(args),
 	}),
 	'set-encyclopedia-entry-publication': tool({
@@ -615,6 +650,7 @@ const account: Record<string, Spec> = {
 
 const CATEGORIES = {
 	account,
+	creation,
 	stories,
 	'stories-write': storiesWrite,
 	publish,

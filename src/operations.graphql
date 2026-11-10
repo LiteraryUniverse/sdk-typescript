@@ -6,6 +6,16 @@ query LuIdentity {
     limits { defaultPageSize maxPageSize maxRequestBytes maxDraftBytes maxResponseBytes }
   }
 }
+query LuStoryCreationOptions {
+  result: authorStoryCreationOptions {
+    languages ratings
+    genres { value name }
+    licenses { value name description }
+  }
+}
+mutation LuCreateStory($input: AuthorStoryCreateInput!) {
+  result: createAuthorStory(input: $input) { id slug }
+}
 query LuProfile { result: apiIdentity { userId username } }
 query LuStories($first: Int, $after: String) {
   result: authorStories(first: $first, after: $after) {

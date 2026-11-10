@@ -870,3 +870,30 @@ test('blog readback preserves versions and mutation retries preserve the full re
 	assert.deepEqual(requests[2], requests[3])
 	assert.deepEqual(requests[3].variables, { input })
 })
+
+test('story creation keeps the author choices and does not retry an uncertain write', async () => {
+	let calls = 0
+	const input = {
+		title: 'My story',
+		slug: 'my-story',
+		description: 'Description',
+		language: 'cs',
+		genres: ['fantasy'],
+		rating: 'teen',
+		license: 'cc-by',
+		isAIGenerated: false,
+	}
+	const client = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		fetch: async (_url, options) => {
+			calls++
+			const request = JSON.parse(options.body)
+			assert.equal(request.operationName, 'LuCreateStory')
+			assert.deepEqual(request.variables.input, input)
+			return new Response('Unavailable', { status: 503 })
+		},
+	})
+	await assert.rejects(client.createStory(input))
+	assert.equal(calls, 1)
+})
