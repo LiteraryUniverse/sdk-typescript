@@ -870,3 +870,72 @@ test('a conflict resolved either way is settled', async () => {
 	assert.equal(note('Stories/Balance/01 One.md').body, 'Theirs.')
 	assert.deepEqual(server.calls, [])
 })
+
+test('typing in a new chapter note while it is created records it once', async () => {
+	await sync()
+	const draft = 'Stories/Balance/Draft.md'
+	files.store.set(
+		draft,
+		`---\n${yaml.stringify({ lu_kind: 'chapter', title: 'Three' })}\n---\n\nThird.\n`,
+	)
+	const create = server.client.createChapter
+	server.client.createChapter = async (input) => {
+		const created = await create(input)
+		edit(draft, ({ meta, body }) => ({ meta, body: `${body} Typing.` }))
+		return created
+	}
+	const report = await sync()
+	server.client.createChapter = create
+	assert.deepEqual(report.failures, [])
+	const created = note('Stories/Balance/03 Three.md')
+	assert.equal(created.meta.lu_id, 'c3')
+	assert.equal(created.body, 'Third. Typing.')
+	server.calls.length = 0
+	await sync()
+	assert.deepEqual(
+		server.calls.map(([name]) => name),
+		['saveDraft'],
+	)
+})
+
+test('a rename here keeps a reorder made on the site', async () => {
+	await sync()
+	edit('Stories/Balance/02 Two.md', ({ meta, body }) => ({
+		meta: { ...meta, title: 'Deux' },
+		body,
+	}))
+	const [one, two] = server.state.chapters
+	one.sequence = 1
+	two.sequence = 0
+	await sync()
+	assert.deepEqual(
+		server.calls.map(([name]) => name),
+		['renameChapter'],
+	)
+	assert.equal(note('Stories/Balance/01 Deux.md').meta.sequence, 1)
+})
+
+test('a note copied in from another universe stays out of the push', async () => {
+	await sync()
+	files.store.set(
+		'Encyclopedia/Characters/Stranger.md',
+		`---\n${yaml.stringify({ lu_kind: 'entry', lu_id: 'e77', lu_version: 'x', lu_hash: 'x' })}\n---\n\nFrom elsewhere.\n`,
+	)
+	server.calls.length = 0
+	await sync()
+	assert.deepEqual(server.calls, [])
+})
+
+test('an entry whose section text has a "## " line is left to the site', async () => {
+	server.state.entry.fields[0].text = 'Born a prince.\n## Later\nA captain.'
+	await sync()
+	edit('Encyclopedia/Characters/Nemo.md', ({ meta, body }) => ({
+		meta,
+		body: body.replace('A captain.', 'The captain.'),
+	}))
+	server.calls.length = 0
+	const report = await sync()
+	assert.equal(report.failures.length, 1)
+	assert.match(report.failures[0], /edit the entry on Literary Universe/)
+	assert.ok(!server.calls.some(([name]) => name === 'updateEncyclopediaEntry'))
+})
