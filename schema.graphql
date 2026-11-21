@@ -627,7 +627,7 @@ input AuthorUniverseCreateInput {
 
   """The address segment: lowercase letters, digits and single hyphens."""
   slug: String!
-  description: String
+  description: String!
 
   """A genre value, as the genre list names it."""
   genre: String!

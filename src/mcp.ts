@@ -818,7 +818,7 @@ const universesWrite: Record<string, Spec> = {
 				.string()
 				.max(100)
 				.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-			description: z.string().max(800).optional(),
+			description: z.string().min(1).max(800),
 			genre: z.string().min(1),
 			rating: z.string().min(1),
 			license: z.string().min(1),

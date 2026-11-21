@@ -112,7 +112,7 @@ export type AuthorUniverseCreateInput = {
   title: string;
   /** The address segment: lowercase letters, digits and single hyphens. */
   slug: string;
-  description?: string | null | undefined;
+  description: string;
   /** A genre value, as the genre list names it. */
   genre: string;
   rating: string;
