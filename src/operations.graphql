@@ -52,12 +52,12 @@ query LuChapters($storyId: ID!, $language: Locale, $first: Int, $after: String) 
   }
 }
 query LuDraft($id: ID!, $language: Locale) {
-  result: authorChapterDraft(id: $id, language: $language) { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters }
+  result: authorChapterDraft(id: $id, language: $language) { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters aiModel }
 }
 mutation LuSaveDraft($input: AuthorDraftSaveInput!) {
   result: authorSaveChapterDraft(input: $input) {
     version recoveryId warnings { code path message }
-    draft { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters }
+    draft { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters aiModel }
   }
 }
 query LuValidateDraft($input: AuthorDraftSaveInput!) {

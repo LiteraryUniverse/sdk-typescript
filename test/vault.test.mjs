@@ -180,6 +180,7 @@ function fakeServer() {
 				language,
 				...edition,
 				version: chapter.version,
+				aiModel: chapter.aiModel ?? null,
 			}
 		},
 		saveDraft: async (input) => {
@@ -190,6 +191,7 @@ function fakeServer() {
 			const edition =
 				input.language === 'en' ? chapter : state.translations[input.id]
 			edition.markdown = input.markdown
+			if (input.aiModel) chapter.aiModel = input.aiModel
 			chapter.version = `${chapter.version}+`
 			edition.updatedAt = `${edition.updatedAt}+`
 			return {
@@ -227,7 +229,12 @@ function fakeServer() {
 				version: 'v1',
 			}
 		},
-		updateStory: async (input) => record('updateStory', input),
+		updateStory: async (input) => {
+			record('updateStory', input)
+			const { title, description, tags, genres } = input.input
+			Object.assign(state.story, { title, description, tags, genres })
+			state.story.version = `${state.story.version}+`
+		},
 		updateUniverse: async (input) => record('updateUniverse', input),
 		encyclopediaEntries: async () =>
 			page([
@@ -608,9 +615,8 @@ test('a save in one language does not wedge another edited in the same sync', as
 		meta,
 		body: 'Znovu.',
 	}))
-	await sync()
-	const next = await sync()
-	assert.deepEqual(next.conflicts, [])
+	const report = await sync()
+	assert.deepEqual([report.conflicts, report.failures], [[], []])
 	assert.equal(server.state.chapters[0].markdown, 'Again.')
 	assert.equal(server.state.translations.c1.markdown, 'Znovu.')
 	assert.ok(
@@ -671,8 +677,17 @@ test('does not overwrite a note typed into during the sync', async () => {
 		return saved
 	}
 	const report = await sync()
+	assert.deepEqual(report.failures, [])
 	assert.equal(note(path).body, 'Second. More. Typing.')
-	assert.ok(report.failures.some((line) => line.includes('changed during sync')))
+	// The push is recorded, so the typing is a plain edit on the new version.
+	assert.equal(note(path).meta.lu_version, 'v1+')
+	server.client.saveDraft = save
+	server.calls.length = 0
+	assert.deepEqual((await sync()).conflicts, [])
+	assert.deepEqual(
+		server.calls.map(([name, input]) => [name, input.expectedVersion]),
+		[['saveDraft', 'v1+']],
+	)
 })
 
 test('keeps an existing file where a note would go', async () => {
@@ -681,4 +696,154 @@ test('keeps an existing file where a note would go', async () => {
 	assert.equal(files.store.get('Universe.md'), '# My own universe notes')
 	assert.equal(note('Universe (u1).md').meta.lu_id, 'u1')
 	assert.deepEqual((await sync()).created, [])
+})
+
+const addChapters = (...titles) => {
+	for (const title of titles)
+		server.state.chapters.push({
+			id: `c${server.state.chapters.length + 1}`,
+			sequence: server.state.chapters.length,
+			title,
+			markdown: `${title}.`,
+			version: 'v1',
+			updatedAt: 't1',
+		})
+}
+
+test('swaps two chapters', async () => {
+	addChapters('Three', 'Four')
+	await sync()
+	edit('Stories/Balance/01 One.md', ({ meta, body }) => ({
+		meta: { ...meta, sequence: 2 },
+		body,
+	}))
+	edit('Stories/Balance/02 Two.md', ({ meta, body }) => ({
+		meta: { ...meta, sequence: 1 },
+		body,
+	}))
+	await sync()
+	assert.deepEqual(server.calls[0][1].chapterIds, ['c2', 'c1', 'c3', 'c4'])
+	assert.ok(files.store.has('Stories/Balance/01 Two.md'))
+	assert.ok(files.store.has('Stories/Balance/02 One.md'))
+})
+
+test('a renamed chapter is not moved', async () => {
+	await sync()
+	edit('Stories/Balance/01 One.md', ({ meta, body }) => ({
+		meta: { ...meta, title: 'Uno' },
+		body,
+	}))
+	edit('Stories/Balance/02 Two.md', ({ meta, body }) => ({
+		meta: { ...meta, sequence: 1 },
+		body,
+	}))
+	await sync()
+	assert.deepEqual(
+		server.calls.map(([name]) => name),
+		['renameChapter', 'reorderChapters'],
+	)
+	assert.deepEqual(server.calls[1][1].chapterIds, ['c2', 'c1'])
+	assert.ok(files.store.has('Stories/Balance/02 Uno.md'))
+	server.calls.length = 0
+	await sync()
+	assert.deepEqual(server.calls, [])
+})
+
+test('an AI edit after another language was saved is no conflict', async () => {
+	await sync()
+	await server.client.saveDraft({
+		id: 'c1',
+		language: 'cs',
+		expectedVersion: 'v1',
+		markdown: 'Upraveno.',
+	})
+	server.calls.length = 0
+	edit('Stories/Balance/01 One.md', ({ meta }) => ({
+		meta: { ...meta, ai_model: 'claude-opus-5-5' },
+		body: 'Drafted.',
+	}))
+	const report = await sync()
+	assert.deepEqual([report.conflicts, report.failures], [[], []])
+	assert.deepEqual(
+		server.calls.map(([name, input]) => [name, input.expectedVersion, input.aiModel]),
+		[['saveDraft', 'v1+', 'claude-opus-5-5']],
+	)
+	server.calls.length = 0
+	await sync()
+	assert.deepEqual(server.calls, [])
+})
+
+test('story scope pushes only that story and creates originals only', async () => {
+	await sync()
+	edit('Universe.md', ({ meta }) => ({ meta, body: 'Changed.' }))
+	edit('Encyclopedia/Characters/Nemo.md', ({ meta }) => ({
+		meta: { ...meta, tags: [] },
+		body: 'Changed.',
+	}))
+	files.store.set(
+		'Stories/Balance/Nová.md',
+		`---\n${yaml.stringify({ lu_kind: 'chapter', lu_language: 'cs' })}\n---\n\nText.\n`,
+	)
+	const report = await sync({ scope: { kind: 'story', storyId: 's1' } })
+	assert.deepEqual(server.calls, [])
+	assert.equal(report.failures.length, 1)
+	assert.match(report.failures[0], /Nová\.md: .*story's language \(en\)/)
+})
+
+test('pushed story details take the version read back only when it holds them', async () => {
+	await sync()
+	edit('Stories/Balance/Story.md', ({ meta }) => ({ meta, body: 'Peace.' }))
+	await sync()
+	assert.equal(note('Stories/Balance/Story.md').meta.lu_version, 'sv1+')
+	server.calls.length = 0
+	await sync()
+	assert.deepEqual(server.calls, [])
+
+	// An edit on the site right after the push is pulled, not overwritten.
+	const update = server.client.updateStory
+	server.client.updateStory = async (input) => {
+		await update(input)
+		server.state.story.description = 'Edited on the site.'
+		server.state.story.version = 'sv9'
+	}
+	edit('Stories/Balance/Story.md', ({ meta }) => ({ meta, body: 'War.' }))
+	await sync()
+	assert.equal(note('Stories/Balance/Story.md').meta.lu_version, 'sv1+')
+	server.client.updateStory = update
+	server.calls.length = 0
+	const report = await sync()
+	assert.deepEqual(report.updated, ['Stories/Balance/Story.md'])
+	assert.equal(note('Stories/Balance/Story.md').body, 'Edited on the site.')
+	assert.deepEqual(server.calls, [])
+})
+
+test('a conflict resolved either way is settled', async () => {
+	const conflict = async () => {
+		await sync()
+		edit('Stories/Balance/01 One.md', ({ meta }) => ({ meta, body: 'Mine.' }))
+		Object.assign(server.state.chapters[0], {
+			markdown: 'Theirs.',
+			version: `${server.state.chapters[0].version}+`,
+			updatedAt: `${server.state.chapters[0].updatedAt}+`,
+		})
+		assert.equal((await sync()).conflicts.length, 1)
+	}
+	// Taking the server's text, copy still there.
+	await conflict()
+	edit('Stories/Balance/01 One.md', ({ meta }) => ({ meta, body: 'Theirs.' }))
+	let report = await sync()
+	assert.deepEqual(report.conflicts, [])
+	assert.equal(note('Stories/Balance/01 One.md').meta.lu_conflict, undefined)
+	assert.deepEqual(server.calls, [])
+
+	// Going back to the text before the edit, copy deleted.
+	server.state.chapters[0].markdown = 'First.'
+	server.state.chapters[0].version = 'v5'
+	await conflict()
+	edit('Stories/Balance/01 One.md', ({ meta }) => ({ meta, body: 'First.' }))
+	files.store.delete('Stories/Balance/01 One (Literary Universe).md')
+	report = await sync()
+	assert.deepEqual(report.conflicts, [])
+	assert.equal(note('Stories/Balance/01 One.md').body, 'Theirs.')
+	assert.deepEqual(server.calls, [])
 })

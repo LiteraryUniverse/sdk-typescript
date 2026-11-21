@@ -484,6 +484,11 @@ type AuthorChapterDraft {
   authorsNotes: JSON
   translatorsNotes: JSON
   counters: JSON
+
+  """
+  The AI model that wrote the chapter, when one did; one for every language of it.
+  """
+  aiModel: String
 }
 
 input AuthorDraftSaveInput {
