@@ -595,9 +595,10 @@ as the signed-in person. `action` is `save` (without `postId` it creates a
 draft, with `expectedVersion: null`), `translate` (with `language`), `publish`
 (now, or at `publishAt`; a live post keeps its date) or `unpublish`. `post`
 takes `title`, `slug`, `intro`, the body as one of `markdown` and `content`
-(Tiptap JSON), `tags`, `language`, `coverFileId` (a `blog-image` upload; null
-removes it), `isAIGenerated` and `aiModel`. Omitted fields keep their value, and
-a fan-club gate stays as set in the web editor.
+(Tiptap JSON), `tags`, `language`, `coverFileId` (a `blog-image` upload for
+this blog; null removes it), `isAIGenerated` and `aiModel`. Omitted fields keep
+their value, and a fan-club gate stays as set in the web editor. An account
+barred from publishing gets `FORBIDDEN` on `publish`.
 
 ```ts
 const post = await client.mutateBlogPost({
@@ -613,7 +614,8 @@ await client.mutateBlogPost({
 A create whose slug the blog already uses fails with `CONFLICT` naming that
 post, so a retried create never posts twice. A stale version fails with
 `VERSION_CONFLICT`. Markdown edits of a body that holds blog widgets or other
-content Markdown cannot carry fail with `MARKDOWN_UNSUPPORTED`. Organization
+content Markdown cannot carry, or that is stored as HTML only, fail with
+`MARKDOWN_UNSUPPORTED`. Organization
 keys can read their own organization blog's posts but not write them: a post
 is signed by a person. Fan-club tiers, podcasts and literary
 commentary stay in the web editor.

@@ -352,7 +352,9 @@ const publish: Record<string, Spec> = {
 		run: async (client, { confirm, ...input }) => {
 			if (!confirm) return { published: false, wouldPublish: input }
 			const post = await client.mutateBlogPost({ ...input, action: 'publish' })
-			return { published: true, ...postSummary(post) }
+			const result = postSummary(post, input.language)
+			// The server keeps a post unpublished for an account barred from publishing.
+			return { published: Boolean(result.publishedAt), ...result }
 		},
 		text: (result) =>
 			result.published
@@ -377,7 +379,8 @@ const publish: Record<string, Spec> = {
 				...input,
 				action: 'unpublish',
 			})
-			return { unpublished: true, ...postSummary(post) }
+			const result = postSummary(post, input.language)
+			return { unpublished: !result.publishedAt, ...result }
 		},
 		text: (result) =>
 			result.unpublished
@@ -1025,6 +1028,8 @@ const docs: Record<string, Spec> = {
 
 type BlogDocument = { id: string; version: string; data: JsonValue }
 type PostFields = Record<string, unknown> & { i18n?: Record<string, Json> }
+/** The editor stores `{content, html}`; a post made from a diary entry stores the Tiptap document itself. */
+const tiptapOf = (body?: Json) => (body?.type === 'doc' ? body : body?.content)
 /** One language of a post: its text as Markdown, the Tiptap JSON only on request. */
 function postView(
 	post: BlogDocument,
@@ -1052,15 +1057,19 @@ function postView(
 		slug: text?.slug,
 		intro: text?.intro,
 		tags: text?.tags ?? [],
-		publishedAt: text?.publishedAt ?? null,
+		// A legacy translation without a date shows whenever the original does.
+		publishedAt:
+			(language && text && !('publishedAt' in text)
+				? original.publishedAt
+				: text?.publishedAt) ?? null,
 		isAIGenerated: text?.isAIGenerated ?? original.isAIGenerated ?? false,
 		...(format === 'json'
-			? { content: (text?.content as Json | undefined)?.content ?? null }
+			? { content: tiptapOf(text?.content as Json | undefined) ?? null }
 			: { markdown: text?.markdown ?? null }),
 	}
 }
-function postSummary(post: BlogDocument): Json {
-	const summary: Json = postView(post)
+function postSummary(post: BlogDocument, language?: string): Json {
+	const summary: Json = postView(post, language)
 	delete summary.markdown
 	return summary
 }
@@ -1100,7 +1109,7 @@ const blogs: Record<string, Spec> = {
 		},
 		annotations: READ,
 		run: async (client, args) => ({
-			posts: (await client.blogPosts(args)).map(postSummary),
+			posts: (await client.blogPosts(args)).map((post) => postSummary(post)),
 		}),
 	}),
 	'get-blog-post': tool({
@@ -1138,7 +1147,7 @@ const blogsWrite: Record<string, Spec> = {
 			coverFileId: z
 				.string()
 				.optional()
-				.describe('fileId of a blog-image upload'),
+				.describe('fileId of a blog-image upload for this blog'),
 			...disclosure,
 		},
 		annotations: CREATE,
@@ -1170,10 +1179,10 @@ const blogsWrite: Record<string, Spec> = {
 				.string()
 				.nullable()
 				.optional()
-				.describe('fileId of a blog-image upload; null removes the cover'),
+				.describe('fileId of a blog-image upload for this blog; null removes the cover'),
 			...disclosure,
 		},
-		annotations: WRITE,
+		annotations: hints(false, true, true),
 		run: async (
 			client,
 			{ blogId, postId, expectedVersion, content, ...post },
@@ -1200,7 +1209,7 @@ const blogsWrite: Record<string, Spec> = {
 			...postText,
 			...disclosure,
 		},
-		annotations: WRITE,
+		annotations: hints(false, true, true),
 		run: async (client, { blogId, postId, expectedVersion, language, ...post }) =>
 			postView(
 				await client.mutateBlogPost({

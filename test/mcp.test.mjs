@@ -530,6 +530,19 @@ test('blog post tools read Markdown per language and map writes to mutateAuthorB
 	const czech = await call('get-blog-post', { id: 'post', language: 'cs' })
 	assert.equal(czech.structuredContent.markdown, 'Ahoj')
 	assert.equal(czech.structuredContent.publishedAt, '2026-01-01T00:00:00Z')
+	const json = await call('get-blog-post', { id: 'post', format: 'json' })
+	assert.deepEqual(json.structuredContent.content, { type: 'doc', content: [] })
+	const legacy = structuredClone(blogPost)
+	legacy.data.publishedAt = '2025-05-05T00:00:00Z'
+	legacy.data.i18n.de = { title: 'Alt', markdown: 'Alt' }
+	legacy.data.content = { type: 'doc', content: [] }
+	const old = await connect({ tools: ['blogs'] }, () =>
+		Response.json({ data: { result: legacy } }),
+	)
+	const german = await old.call('get-blog-post', { id: 'post', language: 'de' })
+	assert.equal(german.structuredContent.publishedAt, '2025-05-05T00:00:00Z')
+	const diary = await old.call('get-blog-post', { id: 'post', format: 'json' })
+	assert.deepEqual(diary.structuredContent.content, { type: 'doc', content: [] })
 	const missing = await call('get-blog-post', { id: 'post', language: 'de' })
 	assert.equal(missing.isError, true)
 
@@ -589,9 +602,19 @@ test('publish-blog-post without confirm echoes the request and sends nothing', a
 	const dry = await call('publish-blog-post', input)
 	assert.equal(dry.structuredContent.published, false)
 	assert.equal(sent.length, 0)
-	const live = await call('publish-blog-post', { ...input, confirm: true })
+	const live = await call('publish-blog-post', {
+		...input,
+		language: 'cs',
+		confirm: true,
+	})
+	// The Czech translation's own date, not the original's (unpublished) one.
 	assert.equal(live.structuredContent.published, true)
+	assert.equal(live.structuredContent.language, 'cs')
 	assert.equal(sent[0].variables.input.action, 'publish')
-	await call('unpublish-blog-post', { ...input, confirm: true })
+	const held = await call('unpublish-blog-post', { ...input, confirm: true })
 	assert.equal(sent[1].variables.input.action, 'unpublish')
+	assert.equal(held.structuredContent.unpublished, true)
+	// A publish the server refused to date (a publication-restricted account) is not reported as live.
+	const refused = await call('publish-blog-post', { ...input, confirm: true })
+	assert.equal(refused.structuredContent.published, false)
 })
