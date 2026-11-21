@@ -7,6 +7,7 @@ import {
 	readVaultConfig,
 	splitNote,
 	syncVault,
+	vaultStatus,
 	writeVaultConfig,
 } from '../dist/esm/vault.js'
 
@@ -563,4 +564,31 @@ test('entry bodies round-trip and the config is checked', async () => {
 	assert.equal((await readVaultConfig(store)).scope.storyId, 's1')
 	await store.write('.lu/vault.json', '{"version":2}')
 	await assert.rejects(readVaultConfig(store), { code: 'INVALID_PROJECT' })
+})
+
+test('reports offline what the next sync would push', async () => {
+	await sync()
+	const status = () =>
+		vaultStatus({ files, yaml, scope: { kind: 'universe', universeId: 'u1' } })
+	assert.deepEqual(await status(), [])
+	edit('Stories/Balance/02 Two.md', ({ meta, body }) => ({
+		meta,
+		body: `${body} More.`,
+	}))
+	edit('Encyclopedia/Characters/Nemo.md', ({ meta, body }) => ({
+		meta: { ...meta, tags: [] },
+		body,
+	}))
+	files.store.set(
+		'Stories/Balance/New.md',
+		'---\nlu_kind: "chapter"\n---\n\nText.\n',
+	)
+	assert.deepEqual(
+		(await status()).map(({ path, state }) => [path, state]),
+		[
+			['Encyclopedia/Characters/Nemo.md', 'edited'],
+			['Stories/Balance/02 Two.md', 'edited'],
+			['Stories/Balance/New.md', 'new'],
+		],
+	)
 })

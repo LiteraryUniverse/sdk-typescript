@@ -403,11 +403,12 @@ same call.
 ## Vault sync
 
 ```ts
-import { readVaultConfig, syncVault, writeVaultConfig } from '@literary-universe/sdk/vault'
+import { readVaultConfig, syncVault, vaultStatus, writeVaultConfig } from '@literary-universe/sdk/vault'
 
 await writeVaultConfig(files, { version: 1, baseUrl, scope: { kind: 'universe', universeId } })
 const report = await syncVault({ client, files, yaml, scope: (await readVaultConfig(files)).scope })
 // { created, updated, pushed, conflicts, failures }
+await vaultStatus({ files, yaml, scope })   // offline: [{ path, kind, state: 'edited' | 'conflict' | 'new' }]
 ```
 
 `syncVault` keeps a folder of Markdown notes and Literary Universe in step, in both directions. The Literary Universe CLI (`lu sync`) and the Obsidian plugin both use it. You supply the storage (`files`: `list`, `read`, `write`, `rename`, `exists` with `/` paths relative to the folder) and a YAML parser (`yaml`: `parse`, `stringify`), so it runs in Node, Bun and Obsidian on desktop and mobile. The scope is a universe, one story, or every story you can write (`{ kind: 'workshop', folder }`), and `language` limits it to one language's editions.

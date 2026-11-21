@@ -223,6 +223,33 @@ export async function syncVault(options: Options): Promise<SyncReport> {
 	return new Sync(options).run()
 }
 
+export type NoteStatus = {
+	path: string
+	kind: string
+	/** `edited` is pushed by the next sync; `conflict` waits for its copy to go; `new` is created. */
+	state: 'edited' | 'conflict' | 'new'
+}
+/** What the next sync would push, read offline from the notes alone. */
+export async function vaultStatus(
+	options: Omit<Options, 'client' | 'language'>,
+): Promise<NoteStatus[]> {
+	const sync = new Sync({ ...options, client: undefined as unknown as Client })
+	await sync.index()
+	const found: NoteStatus[] = []
+	for (const note of sync.notes.values()) {
+		const kind = str(note.meta.lu_kind) || 'chapter'
+		if (['series', 'comic'].includes(kind)) continue
+		const conflict = str(note.meta.lu_conflict)
+		if (conflict && (await options.files.exists(conflict)))
+			found.push({ path: note.path, kind, state: 'conflict' })
+		else if (await sync.edited(kind, note))
+			found.push({ path: note.path, kind, state: 'edited' })
+	}
+	for (const note of sync.fresh)
+		found.push({ path: note.path, kind: str(note.meta.lu_kind), state: 'new' })
+	return found.sort((a, b) => a.path.localeCompare(b.path))
+}
+
 class Sync {
 	report: SyncReport = {
 		created: [],
@@ -428,6 +455,30 @@ class Sync {
 		'ai_model',
 	])
 	translationHash = this.detailsHash(['title'])
+
+	/** Whether the note changed since its last sync. */
+	async edited(kind: string, note: Note) {
+		if (kind === 'chapter') {
+			const original = note.meta.sequence !== undefined
+			const meta = await this.chapterMetaHash(
+				note.meta.title,
+				original ? note.meta.sequence : 0,
+			)
+			return (
+				(await sha256(note.body)) !== note.meta.lu_hash ||
+				Boolean(note.meta.lu_meta && meta !== note.meta.lu_meta)
+			)
+		}
+		const hasher =
+			kind === 'entry'
+				? this.entryHash
+				: kind === 'story'
+					? this.storyHash
+					: kind === 'universe'
+						? this.universeHash
+						: this.translationHash
+		return (await hasher(note)) !== note.meta.lu_hash
+	}
 
 	async pullUniverse(id: string) {
 		const universe = await this.o.client.universe({ id })
