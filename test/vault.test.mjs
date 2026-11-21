@@ -690,6 +690,29 @@ test('does not overwrite a note typed into during the sync', async () => {
 	)
 })
 
+test('does not record a pulled change over typing during the sync', async () => {
+	await sync()
+	const path = 'Stories/Balance/02 Two.md'
+	Object.assign(
+		server.state.chapters.find((chapter) => chapter.id === 'c2'),
+		{ markdown: 'Second, revised.', version: 'v2', updatedAt: 't2' },
+	)
+	const draft = server.client.draft
+	server.client.draft = async (input) => {
+		const fetched = await draft(input)
+		edit(path, ({ meta, body }) => ({ meta, body: `${body} Typing.` }))
+		return fetched
+	}
+	const report = await sync()
+	server.client.draft = draft
+	assert.deepEqual(report.failures, [`${path}: changed during sync; sync again`])
+	assert.equal(note(path).body, 'Second. Typing.')
+	assert.equal(note(path).meta.lu_version, 'v1')
+	// Both texts survive: the next sync keeps the typing and shows the server's.
+	assert.equal((await sync()).conflicts.length, 1)
+	assert.equal(note(path).body, 'Second. Typing.')
+})
+
 test('keeps an existing file where a note would go', async () => {
 	files.store.set('Universe.md', '# My own universe notes')
 	await sync()

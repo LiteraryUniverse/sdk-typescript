@@ -374,6 +374,22 @@ class Sync {
 				Object.entries(meta).filter(
 					([name]) => name.startsWith('lu_') === state,
 				)
+			const content = (meta: Meta, body: string) =>
+				JSON.stringify([
+					pick(meta, false).sort(([a], [b]) => a.localeCompare(b)),
+					body,
+				])
+			const read = splitNote(last as string, this.o.yaml)
+			if (content(note.meta, note.body) !== content(read.meta, read.body)) {
+				// This write brings the server's text or title: keep the typing and
+				// the old state, so the next sync weighs them as a conflict.
+				this.report.failures.push(
+					`${note.path}: changed during sync; sync again`,
+				)
+				return
+			}
+			// Only sync state changes (a push or a create was recorded): keep the
+			// typing and record the state, so the next sync pushes it.
 			note.meta = Object.fromEntries([
 				...pick(typed.meta, false),
 				...pick(note.meta, true),
