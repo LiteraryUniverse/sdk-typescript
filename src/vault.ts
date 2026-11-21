@@ -1195,7 +1195,6 @@ class Sync {
 			// The model is the chapter's: a note sends it only when the author
 			// changed it there, so another language's edit can't undo it.
 			const changed = (item: Note) =>
-				item.meta.lu_ai === undefined ||
 				str(item.meta.ai_model) !== str(item.meta.lu_ai)
 			const model = changed(note) ? aiModel : undefined
 			const saved = await client.saveDraft({
@@ -1403,6 +1402,9 @@ class Sync {
 					''
 				).trim(),
 		)
+		// For a translation, `current` is that edition: its titles and privacy.
+		if (!same)
+			refuseUnsafeSections(note.body, parsed.fields, current?.fields ?? [])
 		if (language) {
 			const titles = (note.meta.lu_fields ?? {}) as Record<string, string>
 			return client.translateEncyclopediaEntry({
@@ -1419,7 +1421,6 @@ class Sync {
 				})),
 			})
 		}
-		if (!same) refuseUnsafeSections(note.body, parsed.fields, current?.fields ?? [])
 		const parent = unlink(note.meta.parent)
 		const related = list(note.meta.related).map(unlink)
 		// The folder is the category as a file name; send it only when the note moved.
@@ -1464,7 +1465,10 @@ class Sync {
 		)
 		// A note waiting on its conflict copy neither moves nor is moved.
 		const held = (note?: Note) =>
-			Boolean(note?.meta.lu_conflict || (note && this.deferred.has(note)))
+			Boolean(
+				note?.meta.lu_conflict ||
+					(note && (this.deferred.has(note) || this.heldTitles.has(note))),
+			)
 		// Moved: a numeric `sequence` other than the chapter's place. A new title is no move.
 		const targets = chapters.map((chapter, index) => {
 			const sequence = notes[index]?.meta.sequence

@@ -1094,3 +1094,54 @@ test('a chapter renamed on both sides keeps this title and says so', async () =>
 		['Dva'],
 	)
 })
+
+test('a translation cannot move private text into a public section', async () => {
+	const czech = {
+		...server.state.entry,
+		language: 'cs',
+		name: 'Nemo',
+		summary: 'Kapitán.',
+		version: 'cv1',
+		released: [],
+		fields: [
+			{ id: 'f1', title: 'Tajemství', type: 'textarea', private: true, text: 'Princ.' },
+			{ id: 'f3', title: 'Loď', type: 'textarea', private: false, text: 'Nautilus.' },
+		],
+	}
+	const list = server.client.encyclopediaEntries
+	server.client.encyclopediaEntries = async (input) => {
+		const result = await list(input)
+		result.nodes[0].editions.push({ language: 'cs', version: 'cv1', releasedRevision: null })
+		return result
+	}
+	server.client.encyclopediaEntry = async ({ language }) =>
+		language === 'cs' ? czech : server.state.entry
+	server.client.translateEncyclopediaEntry = async (input) => {
+		server.calls.push(['translateEncyclopediaEntry', input])
+		return czech
+	}
+	await sync()
+	const path = 'Encyclopedia/Characters/Nemo.cs.md'
+	edit(path, ({ meta, body }) => ({
+		meta,
+		body: body.replace('Princ.', 'Princ.\n\n## Loď\n\nTajný plán.'),
+	}))
+	server.calls.length = 0
+	const report = await sync()
+	assert.equal(report.failures.length, 1, report.failures.join())
+	assert.ok(!server.calls.some(([name]) => name === 'translateEncyclopediaEntry'))
+})
+
+test('an AI model set on a chapter without one reaches its other languages', async () => {
+	await sync()
+	edit('Stories/Balance/01 One.md', ({ meta, body }) => ({
+		meta: { ...meta, ai_model: 'model-y' },
+		body,
+	}))
+	await sync()
+	assert.equal(server.state.chapters[0].aiModel, 'model-y')
+	assert.equal(note('Stories/Balance/01 Jedna.cs.md').meta.ai_model, 'model-y')
+	server.calls.length = 0
+	await sync()
+	assert.deepEqual(server.calls, [])
+})
