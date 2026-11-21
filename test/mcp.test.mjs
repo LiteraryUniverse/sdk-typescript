@@ -74,6 +74,7 @@ test('selectTools expands categories and names, dedupes, and rejects unknown ent
 	assert.deepEqual(selectTools(['publish']), [
 		'publish-chapter',
 		'publish-comic-chapter',
+		'publish-encyclopedia-entry',
 	])
 	assert.deepEqual(selectTools(['get-story', 'stories']), [
 		'get-story',
@@ -83,7 +84,7 @@ test('selectTools expands categories and names, dedupes, and rejects unknown ent
 	])
 	const all = selectTools(['all'])
 	assert.equal(all.length, Object.values(TOOL_CATEGORIES).flat().length)
-	assert.equal(all.length, 52)
+	assert.equal(all.length, 54)
 	assert.throws(() => selectTools(['nope']), {
 		code: 'INVALID_CONFIGURATION',
 		message: 'Unknown tool or category: nope',
@@ -97,7 +98,7 @@ test('every registered tool carries a title and all four annotation hints', asyn
 		readLocalFile: async () => new Uint8Array([1]),
 	})
 	const { tools } = await client.listTools()
-	assert.equal(tools.length, 52)
+	assert.equal(tools.length, 54)
 	assert.deepEqual(
 		tools.map((tool) => tool.name).sort(),
 		[...registered].sort(),
@@ -346,6 +347,7 @@ test('the CommonJS build exposes the same MCP entry', () => {
 	assert.deepEqual(mcp.selectTools(['publish']), [
 		'publish-chapter',
 		'publish-comic-chapter',
+		'publish-encyclopedia-entry',
 	])
 })
 
@@ -428,7 +430,11 @@ test('upload-comic-pages fits each local page to policy, uploads it to the chapt
 		{
 			tools: ['comics-write'],
 			readLocalFile: async (path) => {
-				assert.equal(uploads, read.length, 'upload each page before reading the next')
+				assert.equal(
+					uploads,
+					read.length,
+					'upload each page before reading the next',
+				)
 				read.push(path)
 				return new Uint8Array(png)
 			},

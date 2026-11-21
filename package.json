@@ -48,6 +48,16 @@
         "types": "./dist/cjs/mcp.d.ts",
         "default": "./dist/cjs/mcp.js"
       }
+    },
+    "./vault": {
+      "import": {
+        "types": "./dist/esm/vault.d.ts",
+        "default": "./dist/esm/vault.js"
+      },
+      "require": {
+        "types": "./dist/cjs/vault.d.ts",
+        "default": "./dist/cjs/vault.js"
+      }
     }
   },
   "files": [

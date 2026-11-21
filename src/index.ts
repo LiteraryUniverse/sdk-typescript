@@ -10,9 +10,11 @@ import {
 	type AuthorComicLayerCreateInput,
 	type AuthorDraftSaveInput,
 	type AuthorEncyclopediaEntryCreateInput,
+	type AuthorEncyclopediaEntryReleaseInput,
 	type AuthorEncyclopediaEntryTranslationInput,
 	type AuthorSeriesSaveInput,
 	type AuthorStoryCreateInput,
+	type AuthorUniverseCreateInput,
 	LuAddComicPagesDocument,
 	type LuAddComicPagesMutation,
 	type LuAddComicPagesMutationVariables,
@@ -49,6 +51,8 @@ import {
 	type LuCreateEncyclopediaEntryMutation,
 	LuCreateStoryDocument,
 	type LuCreateStoryMutation,
+	LuCreateUniverseDocument,
+	type LuCreateUniverseMutation,
 	LuCreateUniverseTranslationDocument,
 	type LuCreateUniverseTranslationMutation,
 	type LuCreateUniverseTranslationMutationVariables,
@@ -80,6 +84,8 @@ import {
 	LuPublishComicChapterDocument,
 	type LuPublishComicChapterMutation,
 	type LuPublishComicChapterMutationVariables,
+	LuPublishEncyclopediaEntryDocument,
+	type LuPublishEncyclopediaEntryMutation,
 	LuRemoveChapterDocument,
 	type LuRemoveChapterMutation,
 	LuRemoveComicChapterDocument,
@@ -333,6 +339,17 @@ export class LiteraryUniverseClient {
 			options,
 		)
 	}
+	/** Creation is not retried: on a lost response, look up the chosen slug with `universes` first. */
+	createUniverse(input: AuthorUniverseCreateInput, options?: RequestOptions) {
+		return this.read<LuCreateUniverseMutation>(
+			LuCreateUniverseDocument,
+			'LuCreateUniverse',
+			{ input },
+			options,
+			undefined,
+			0,
+		)
+	}
 	/** Creation is not retried: on a lost response, look up the chosen slug first. */
 	createStory(input: AuthorStoryCreateInput, options?: RequestOptions) {
 		return this.read<LuCreateStoryMutation>(
@@ -545,6 +562,23 @@ export class LiteraryUniverseClient {
 			options,
 		)
 	}
+	/**
+	 * Releases one edition of an entry to beta readers or everyone. Fails with
+	 * VERSION_CONFLICT when the edition changed since `expectedVersion`; a retry
+	 * with the same `operationId` answers with the first release.
+	 */
+	publishEncyclopediaEntry(
+		input: AuthorEncyclopediaEntryReleaseInput,
+		options?: RequestOptions,
+	) {
+		return this.read<LuPublishEncyclopediaEntryMutation>(
+			LuPublishEncyclopediaEntryDocument,
+			'LuPublishEncyclopediaEntry',
+			{ input },
+			options,
+		)
+	}
+	/** Releases the entry and every translation to readers, or takes it back to a draft. */
 	setEncyclopediaEntryPublication(
 		input: LuSetEncyclopediaEntryPublicationMutationVariables,
 		options?: RequestOptions,

@@ -89,6 +89,18 @@ const operationId = z
 	.optional()
 	.describe('Idempotency key; keep it for a retry, omit for a fresh one')
 const textField = { title: z.string(), text: z.string() }
+const aiModel = z
+	.string()
+	.optional()
+	.describe(
+		'The model that wrote this text, such as claude-opus-5-5. Set it whenever you wrote or rewrote the text; readers see the disclosure. Never omit it for your own writing.',
+	)
+const expectedVersion = z
+	.string()
+	.optional()
+	.describe(
+		'The version last read; the write fails with VERSION_CONFLICT when it changed since',
+	)
 const timeField = {
 	title: z.string(),
 	value: z.string().describe('A date like 1402-03-01, or HH:MM'),
@@ -184,7 +196,7 @@ const bodyShape = {
 	content: json.optional(),
 	operationId,
 }
-const saveShape = { language, ...bodyShape }
+const saveShape = { language, ...bodyShape, aiModel }
 const storiesWrite: Record<string, Spec> = {
 	'save-chapter-draft': tool({
 		title: 'Save chapter draft',
@@ -210,6 +222,7 @@ const storiesWrite: Record<string, Spec> = {
 			storyId: id,
 			title: z.string().optional(),
 			isAIGenerated: z.boolean().optional(),
+			aiModel,
 			...bodyShape,
 		},
 		annotations: CREATE,
@@ -237,10 +250,12 @@ const storiesWrite: Record<string, Spec> = {
 				.nullable()
 				.optional()
 				.describe('null makes the story standalone'),
+			aiModel,
+			expectedVersion,
 		},
 		annotations: WRITE,
-		run: (client, { storyId, ...input }) =>
-			client.updateStory({ storyId, input }),
+		run: (client, { storyId, expectedVersion, ...input }) =>
+			client.updateStory({ storyId, input, expectedVersion }),
 	}),
 	'set-story-visibility': tool({
 		title: 'Set story visibility',
@@ -329,6 +344,40 @@ const publish: Record<string, Spec> = {
 			result.published
 				? JSON.stringify(result, null, 2)
 				: `Nothing published. Call publish-comic-chapter again with confirm: true to publish ${JSON.stringify(result.wouldPublish)}.`,
+	}),
+	'publish-encyclopedia-entry': tool({
+		title: 'Release encyclopedia entry',
+		description:
+			'Release one edition of an entry (the original, or the translation in language) at expectedVersion to readers or beta readers, now or at publishAt. Without confirm: true nothing happens and the request is echoed back; ask the author first.',
+		input: {
+			id,
+			language,
+			expectedVersion: z.string(),
+			publishAt: z
+				.string()
+				.optional()
+				.describe('ISO 8601 with timezone; now when omitted'),
+			audience: z.enum(['READERS', 'BETA']).default('READERS'),
+			operationId,
+			confirm: z.boolean().default(false),
+		},
+		annotations: hints(false, false, true, true),
+		run: async (client, { confirm, ...input }) => {
+			if (!confirm) return { published: false, wouldPublish: input }
+			const entry = await client.publishEncyclopediaEntry({
+				...input,
+				operationId: input.operationId ?? randomUUID(),
+			})
+			return {
+				published: true,
+				released: entry.released,
+				version: entry.version,
+			}
+		},
+		text: (result) =>
+			result.published
+				? JSON.stringify(result, null, 2)
+				: `Nothing released. Call publish-encyclopedia-entry again with confirm: true to release ${JSON.stringify(result.wouldPublish)}.`,
 	}),
 }
 
@@ -552,7 +601,9 @@ const comicsWrite: Record<string, Spec> = {
 					),
 					altText: page.altText,
 				})
-			return { pages: await client.addComicPages({ chapterId, pages: uploaded }) }
+			return {
+				pages: await client.addComicPages({ chapterId, pages: uploaded }),
+			}
 		},
 	}),
 	'replace-comic-page-image': tool({
@@ -696,10 +747,32 @@ const universesWrite: Record<string, Spec> = {
 			rating: z.string().optional(),
 			license: z.string().optional(),
 			language,
+			aiModel,
+			expectedVersion,
 		},
 		annotations: WRITE,
-		run: (client, { universeId, ...input }) =>
-			client.updateUniverse({ universeId, input }),
+		run: (client, { universeId, expectedVersion, ...input }) =>
+			client.updateUniverse({ universeId, input, expectedVersion }),
+	}),
+	'create-universe': tool({
+		title: 'Create a universe',
+		description:
+			'Create an unpublished universe after the author reviews its details. Ask for missing fields using get-story-creation-options (languages, genres, ratings, licenses); never choose a license or AI disclosure for the author. Not automatically retried: after an uncertain response, look for the slug in list-universes first.',
+		input: {
+			title: z.string().min(1).max(100),
+			slug: z
+				.string()
+				.max(100)
+				.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+			description: z.string().max(800).optional(),
+			genre: z.string().min(1),
+			rating: z.string().min(1),
+			license: z.string().min(1),
+			language: z.string().min(1),
+			aiModel,
+		},
+		annotations: CREATE,
+		run: (client, args) => client.createUniverse(args),
 	}),
 	'create-universe-translation': tool({
 		title: 'Create universe translation',
@@ -744,6 +817,7 @@ const universesWrite: Record<string, Spec> = {
 			summary: z.string().optional(),
 			fields: z.array(z.object(textField)).optional(),
 			timeFields: z.array(z.object(timeField)).optional(),
+			aiModel,
 		},
 		annotations: CREATE,
 		run: (client, args) => client.createEncyclopediaEntry(args),
@@ -768,11 +842,13 @@ const universesWrite: Record<string, Spec> = {
 			summary: z.string().optional(),
 			fields: z.array(z.object(textField)).optional(),
 			timeFields: z.array(z.object(timeField)).optional(),
+			aiModel,
+			expectedVersion,
 		},
 		// Replaces existing values; hosts must offer overwrite approval.
 		annotations: hints(false, true, true),
-		run: (client, { id, ...changes }) =>
-			client.updateEncyclopediaEntry({ id, changes }),
+		run: (client, { id, expectedVersion, ...changes }) =>
+			client.updateEncyclopediaEntry({ id, changes, expectedVersion }),
 	}),
 	'translate-encyclopedia-entry': tool({
 		title: 'Translate encyclopedia entry',
@@ -789,6 +865,7 @@ const universesWrite: Record<string, Spec> = {
 					z.object({ ...textField, translatedTitle: z.string().optional() }),
 				)
 				.optional(),
+			expectedVersion,
 		},
 		// Can overwrite an existing translated edition.
 		annotations: hints(false, true, true),
@@ -796,7 +873,8 @@ const universesWrite: Record<string, Spec> = {
 	}),
 	'set-encyclopedia-entry-publication': tool({
 		title: 'Set encyclopedia entry publication',
-		description: 'Publish an entry to readers, or take it back to a draft.',
+		description:
+			'Release an entry and all its translations to readers, or take it back to a draft. To release one edition or to beta readers, use publish-encyclopedia-entry.',
 		input: { id, published: z.boolean() },
 		annotations: WRITE,
 		run: (client, args) => client.setEncyclopediaEntryPublication(args),

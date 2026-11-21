@@ -41,6 +41,11 @@ export type AuthorDraftSaveInput = {
   content?: JsonValue | null | undefined;
   /** Markdown converted on the server with the editor's own Markdown extension. Provide exactly one of content and markdown. Rejected with MARKDOWN_UNSUPPORTED if the stored draft has nodes, marks or attributes Markdown cannot preserve; use content instead. */
   markdown?: string | null | undefined;
+  /**
+   * The AI model that wrote this text; marks the chapter AI-generated. Removing
+   * the mark is done in the workshop.
+   */
+  aiModel?: string | null | undefined;
 };
 
 export type AuthorChapterCreateInput = {
@@ -50,6 +55,8 @@ export type AuthorChapterCreateInput = {
   content?: JsonValue | null | undefined;
   markdown?: string | null | undefined;
   isAIGenerated?: boolean | null | undefined;
+  /** The AI model that wrote the chapter; marks it AI-generated. */
+  aiModel?: string | null | undefined;
 };
 
 export type AuthorPublicationAudience =
@@ -97,6 +104,22 @@ export type AuthorUniverseUpdateInput = {
   rating?: string | null | undefined;
   license?: string | null | undefined;
   language?: string | null | undefined;
+  /** The AI model that wrote the universe; marks it AI-generated. Removing the mark is done in the workshop. */
+  aiModel?: string | null | undefined;
+};
+
+export type AuthorUniverseCreateInput = {
+  title: string;
+  /** The address segment: lowercase letters, digits and single hyphens. */
+  slug: string;
+  description?: string | null | undefined;
+  /** A genre value, as the genre list names it. */
+  genre: string;
+  rating: string;
+  license: string;
+  language: string;
+  /** The AI model that wrote the universe, when one did; readers see the disclosure. */
+  aiModel?: string | null | undefined;
 };
 
 /** A field by its title; a new title adds a text field. */
@@ -157,10 +180,22 @@ export type AuthorEncyclopediaFieldTranslationInput = {
   text: string;
 };
 
+export type AuthorEncyclopediaEntryReleaseInput = {
+  id: string | number;
+  /** The edition to release; the original when omitted. */
+  language?: string | null | undefined;
+  audience?: AuthorPublicationAudience | null | undefined;
+  publishAt?: string | null | undefined;
+  expectedVersion: string;
+  operationId: string | number;
+};
+
 export type AuthorEncyclopediaEntryTranslationInput = {
   id: string | number;
   /** A language the universe is translated into. */
   language: string;
+  /** The edition's version as read; the write fails with VERSION_CONFLICT when it changed since. */
+  expectedVersion?: string | null | undefined;
   name?: string | null | undefined;
   pronunciation?: string | null | undefined;
   summary?: string | null | undefined;
@@ -190,6 +225,8 @@ export type AuthorStoryUpdateInput = {
   language?: string | null | undefined;
   /** Another universe needs edit rights on it; null makes the story standalone. */
   universeId?: string | number | null | undefined;
+  /** The AI model that wrote the story; marks it AI-generated. Removing the mark is done in the workshop. */
+  aiModel?: string | null | undefined;
 };
 
 export type AuthorBlogMutationInput = {
@@ -309,6 +346,13 @@ export type LuStoryCreationOptionsQueryVariables = Exact<{ [key: string]: never;
 
 export type LuStoryCreationOptionsQuery = { result: { languages: Array<string>, ratings: Array<string>, genres: Array<{ value: string, name: string }>, licenses: Array<{ value: string, name: string, description: string | null }> } };
 
+export type LuCreateUniverseMutationVariables = Exact<{
+  input: AuthorUniverseCreateInput;
+}>;
+
+
+export type LuCreateUniverseMutation = { result: { id: string, slug: string } };
+
 export type LuCreateStoryMutationVariables = Exact<{
   input: AuthorStoryCreateInput;
 }>;
@@ -334,7 +378,7 @@ export type LuStoryQueryVariables = Exact<{
 }>;
 
 
-export type LuStoryQuery = { result: { id: string, title: string, slug: string | null, language: string, universeId: string | null, organizationId: string | null, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null, state: AuthorWorkState, description: string | null, authorsNotes: JsonValue | null } | null };
+export type LuStoryQuery = { result: { id: string, title: string, slug: string | null, language: string, universeId: string | null, organizationId: string | null, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null, state: AuthorWorkState, description: string | null, authorsNotes: JsonValue | null, genres: Array<string>, tags: Array<string>, rating: string | null, license: string | null, isAIGenerated: boolean, aiModel: string | null, version: string, translations: Array<string> } | null };
 
 export type LuUniversesQueryVariables = Exact<{
   first?: number | null | undefined;
@@ -349,7 +393,7 @@ export type LuUniverseQueryVariables = Exact<{
 }>;
 
 
-export type LuUniverseQuery = { result: { id: string, title: string, slug: string | null, language: string, organizationId: string | null, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null, state: AuthorWorkState, description: string | null, translations: Array<{ language: string, title: string, description: string | null, revision: number }> } | null };
+export type LuUniverseQuery = { result: { id: string, title: string, slug: string | null, language: string, organizationId: string | null, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null, state: AuthorWorkState, description: string | null, genre: string | null, rating: string | null, license: string | null, isAIGenerated: boolean, aiModel: string | null, version: string, translations: Array<{ language: string, title: string, description: string | null, revision: number }> } | null };
 
 export type LuChaptersQueryVariables = Exact<{
   storyId: string | number;
@@ -427,6 +471,7 @@ export type LuUpdateUniverseTranslationMutation = { result: { language: string, 
 export type LuUpdateStoryMutationVariables = Exact<{
   storyId: string | number;
   input: AuthorStoryUpdateInput;
+  expectedVersion?: string | null | undefined;
 }>;
 
 
@@ -464,6 +509,7 @@ export type LuReorderChaptersMutation = { result: { storyId: string, chapterIds:
 export type LuUpdateUniverseMutationVariables = Exact<{
   universeId: string | number;
   input: AuthorUniverseUpdateInput;
+  expectedVersion?: string | null | undefined;
 }>;
 
 
@@ -476,7 +522,7 @@ export type LuEncyclopediaEntriesQueryVariables = Exact<{
 }>;
 
 
-export type LuEncyclopediaEntriesQuery = { result: { nodes: Array<{ id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string> }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+export type LuEncyclopediaEntriesQuery = { result: { nodes: Array<{ id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, editions: Array<{ language: string, version: string }> }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
 
 export type LuEncyclopediaEntryQueryVariables = Exact<{
   id: string | number;
@@ -484,29 +530,30 @@ export type LuEncyclopediaEntryQueryVariables = Exact<{
 }>;
 
 
-export type LuEncyclopediaEntryQuery = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null }> } | null };
+export type LuEncyclopediaEntryQuery = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, isAIGenerated: boolean, aiModel: string | null, version: string, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null, isAIGenerated: boolean, aiModel: string | null }>, editions: Array<{ language: string, version: string }>, released: Array<{ language: string, audience: AuthorPublicationAudience, revision: number, publishedAt: string, version: string }> } | null };
 
 export type LuCreateEncyclopediaEntryMutationVariables = Exact<{
   input: AuthorEncyclopediaEntryCreateInput;
 }>;
 
 
-export type LuCreateEncyclopediaEntryMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null }> } };
+export type LuCreateEncyclopediaEntryMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, isAIGenerated: boolean, aiModel: string | null, version: string, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null, isAIGenerated: boolean, aiModel: string | null }>, editions: Array<{ language: string, version: string }>, released: Array<{ language: string, audience: AuthorPublicationAudience, revision: number, publishedAt: string, version: string }> } };
 
 export type LuUpdateEncyclopediaEntryMutationVariables = Exact<{
   id: string | number;
   changes: AuthorEncyclopediaEntryChangesInput;
+  expectedVersion?: string | null | undefined;
 }>;
 
 
-export type LuUpdateEncyclopediaEntryMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null }> } };
+export type LuUpdateEncyclopediaEntryMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, isAIGenerated: boolean, aiModel: string | null, version: string, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null, isAIGenerated: boolean, aiModel: string | null }>, editions: Array<{ language: string, version: string }>, released: Array<{ language: string, audience: AuthorPublicationAudience, revision: number, publishedAt: string, version: string }> } };
 
 export type LuTranslateEncyclopediaEntryMutationVariables = Exact<{
   input: AuthorEncyclopediaEntryTranslationInput;
 }>;
 
 
-export type LuTranslateEncyclopediaEntryMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null }> } };
+export type LuTranslateEncyclopediaEntryMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, isAIGenerated: boolean, aiModel: string | null, version: string, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null, isAIGenerated: boolean, aiModel: string | null }>, editions: Array<{ language: string, version: string }>, released: Array<{ language: string, audience: AuthorPublicationAudience, revision: number, publishedAt: string, version: string }> } };
 
 export type LuSetEncyclopediaEntryPublicationMutationVariables = Exact<{
   id: string | number;
@@ -514,7 +561,14 @@ export type LuSetEncyclopediaEntryPublicationMutationVariables = Exact<{
 }>;
 
 
-export type LuSetEncyclopediaEntryPublicationMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null }> } };
+export type LuSetEncyclopediaEntryPublicationMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, isAIGenerated: boolean, aiModel: string | null, version: string, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null, isAIGenerated: boolean, aiModel: string | null }>, editions: Array<{ language: string, version: string }>, released: Array<{ language: string, audience: AuthorPublicationAudience, revision: number, publishedAt: string, version: string }> } };
+
+export type LuPublishEncyclopediaEntryMutationVariables = Exact<{
+  input: AuthorEncyclopediaEntryReleaseInput;
+}>;
+
+
+export type LuPublishEncyclopediaEntryMutation = { result: { id: string, universeId: string, name: string, categoryId: string, categoryTitle: string | null, language: string, wip: boolean, publishedAt: string | null, updatedAt: string | null, translations: Array<string>, pronunciation: string | null, tags: Array<string>, summary: string | null, isAIGenerated: boolean, aiModel: string | null, version: string, parent: { id: string | null, name: string } | null, related: Array<{ id: string | null, name: string }>, fields: Array<{ id: string, title: string, type: string, private: boolean, text: string | null, isAIGenerated: boolean, aiModel: string | null }>, editions: Array<{ language: string, version: string }>, released: Array<{ language: string, audience: AuthorPublicationAudience, revision: number, publishedAt: string, version: string }> } };
 
 export type LuDeleteEncyclopediaEntryMutationVariables = Exact<{
   id: string | number;
@@ -712,12 +766,13 @@ export type LuPublishComicChapterMutation = { result: { id: string, comicId: str
 
 export const LuIdentityDocument = "query LuIdentity {\n  result: apiIdentity {\n    version\n    kind\n    userId\n    organizationId\n    credentialId\n    scopes\n    expiresAt\n    resourceRestrictions {\n      universeIds\n      storyIds\n    }\n    deploymentUrl\n    environment\n    limits {\n      defaultPageSize\n      maxPageSize\n      maxRequestBytes\n      maxDraftBytes\n      maxResponseBytes\n    }\n  }\n}" as const
 export const LuStoryCreationOptionsDocument = "query LuStoryCreationOptions {\n  result: authorStoryCreationOptions {\n    languages\n    ratings\n    genres {\n      value\n      name\n    }\n    licenses {\n      value\n      name\n      description\n    }\n  }\n}" as const
+export const LuCreateUniverseDocument = "mutation LuCreateUniverse($input: AuthorUniverseCreateInput!) {\n  result: createAuthorUniverse(input: $input) {\n    id\n    slug\n  }\n}" as const
 export const LuCreateStoryDocument = "mutation LuCreateStory($input: AuthorStoryCreateInput!) {\n  result: createAuthorStory(input: $input) {\n    id\n    slug\n  }\n}" as const
 export const LuProfileDocument = "query LuProfile {\n  result: apiIdentity {\n    userId\n    username\n  }\n}" as const
 export const LuStoriesDocument = "query LuStories($first: Int, $after: String) {\n  result: authorStories(first: $first, after: $after) {\n    nodes {\n      id\n      title\n      slug\n      language\n      universeId\n      organizationId\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n      state\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
-export const LuStoryDocument = "query LuStory($id: ID!) {\n  result: authorStory(id: $id) {\n    id\n    title\n    slug\n    language\n    universeId\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n    description\n    authorsNotes\n  }\n}" as const
+export const LuStoryDocument = "query LuStory($id: ID!) {\n  result: authorStory(id: $id) {\n    id\n    title\n    slug\n    language\n    universeId\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n    description\n    authorsNotes\n    genres\n    tags\n    rating\n    license\n    isAIGenerated\n    aiModel\n    version\n    translations\n  }\n}" as const
 export const LuUniversesDocument = "query LuUniverses($first: Int, $after: String) {\n  result: authorUniverses(first: $first, after: $after) {\n    nodes {\n      id\n      title\n      slug\n      language\n      organizationId\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n      state\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
-export const LuUniverseDocument = "query LuUniverse($id: ID!) {\n  result: authorUniverse(id: $id) {\n    id\n    title\n    slug\n    language\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n    description\n    translations {\n      language\n      title\n      description\n      revision\n    }\n  }\n}" as const
+export const LuUniverseDocument = "query LuUniverse($id: ID!) {\n  result: authorUniverse(id: $id) {\n    id\n    title\n    slug\n    language\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n    description\n    genre\n    rating\n    license\n    isAIGenerated\n    aiModel\n    version\n    translations {\n      language\n      title\n      description\n      revision\n    }\n  }\n}" as const
 export const LuChaptersDocument = "query LuChapters($storyId: ID!, $language: Locale, $first: Int, $after: String) {\n  result: authorChapters(\n    storyId: $storyId\n    language: $language\n    first: $first\n    after: $after\n  ) {\n    nodes {\n      id\n      storyId\n      sequence\n      title\n      language\n      hasDraft\n      updatedAt\n      publishedAt\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
 export const LuDraftDocument = "query LuDraft($id: ID!, $language: Locale) {\n  result: authorChapterDraft(id: $id, language: $language) {\n    id\n    storyId\n    sequence\n    title\n    language\n    version\n    updatedAt\n    publishedAt\n    content\n    html\n    text\n    oldHtml\n    markdown\n    authorsNotes\n    translatorsNotes\n    counters\n  }\n}" as const
 export const LuSaveDraftDocument = "mutation LuSaveDraft($input: AuthorDraftSaveInput!) {\n  result: authorSaveChapterDraft(input: $input) {\n    version\n    recoveryId\n    warnings {\n      code\n      path\n      message\n    }\n    draft {\n      id\n      storyId\n      sequence\n      title\n      language\n      version\n      updatedAt\n      publishedAt\n      content\n      html\n      text\n      oldHtml\n      markdown\n      authorsNotes\n      translatorsNotes\n      counters\n    }\n  }\n}" as const
@@ -727,18 +782,19 @@ export const LuCreateChapterDocument = "mutation LuCreateChapter($input: AuthorC
 export const LuPublishChapterDocument = "mutation LuPublishChapter($input: AuthorChapterPublishInput!) {\n  result: authorPublishChapter(input: $input) {\n    id\n    storyId\n    language\n    revisionId\n    version\n    audience\n    publishedAt\n    chapterPublishedAt\n    warnings {\n      code\n      path\n      message\n    }\n  }\n}" as const
 export const LuCreateUniverseTranslationDocument = "mutation LuCreateUniverseTranslation($universeId: ID!, $language: Locale!, $input: AuthorUniverseTranslationInput) {\n  result: createAuthorUniverseTranslation(\n    universeId: $universeId\n    language: $language\n    input: $input\n  ) {\n    created\n    translation {\n      language\n      title\n      description\n      revision\n    }\n  }\n}" as const
 export const LuUpdateUniverseTranslationDocument = "mutation LuUpdateUniverseTranslation($universeId: ID!, $language: Locale!, $expectedRevision: Int!, $input: AuthorUniverseTranslationInput!) {\n  result: updateAuthorUniverseTranslation(\n    universeId: $universeId\n    language: $language\n    expectedRevision: $expectedRevision\n    input: $input\n  ) {\n    language\n    title\n    description\n    revision\n  }\n}" as const
-export const LuUpdateStoryDocument = "mutation LuUpdateStory($storyId: ID!, $input: AuthorStoryUpdateInput!) {\n  result: updateAuthorStory(storyId: $storyId, input: $input) {\n    id\n    title\n    slug\n    language\n    universeId\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n  }\n}" as const
+export const LuUpdateStoryDocument = "mutation LuUpdateStory($storyId: ID!, $input: AuthorStoryUpdateInput!, $expectedVersion: String) {\n  result: updateAuthorStory(\n    storyId: $storyId\n    input: $input\n    expectedVersion: $expectedVersion\n  ) {\n    id\n    title\n    slug\n    language\n    universeId\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n  }\n}" as const
 export const LuSetStoryVisibilityDocument = "mutation LuSetStoryVisibility($storyId: ID!, $visibility: AuthorStoryVisibility!) {\n  result: setAuthorStoryVisibility(storyId: $storyId, visibility: $visibility) {\n    id\n    title\n    slug\n    language\n    universeId\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n  }\n}" as const
 export const LuRenameChapterDocument = "mutation LuRenameChapter($input: AuthorChapterRenameInput!) {\n  result: renameAuthorChapter(input: $input) {\n    id\n    storyId\n    sequence\n    title\n    language\n    hasDraft\n    updatedAt\n    publishedAt\n  }\n}" as const
 export const LuRemoveChapterDocument = "mutation LuRemoveChapter($input: AuthorChapterRemoveInput!) {\n  result: removeAuthorChapter(input: $input) {\n    id\n    storyId\n  }\n}" as const
 export const LuReorderChaptersDocument = "mutation LuReorderChapters($input: AuthorChapterReorderInput!) {\n  result: reorderAuthorChapters(input: $input) {\n    storyId\n    chapterIds\n  }\n}" as const
-export const LuUpdateUniverseDocument = "mutation LuUpdateUniverse($universeId: ID!, $input: AuthorUniverseUpdateInput!) {\n  result: updateAuthorUniverse(universeId: $universeId, input: $input) {\n    id\n    title\n    slug\n    language\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n  }\n}" as const
-export const LuEncyclopediaEntriesDocument = "query LuEncyclopediaEntries($universeId: ID!, $first: Int, $after: String) {\n  result: authorEncyclopediaEntries(\n    universeId: $universeId\n    first: $first\n    after: $after\n  ) {\n    nodes {\n      id\n      universeId\n      name\n      categoryId\n      categoryTitle\n      language\n      wip\n      publishedAt\n      updatedAt\n      translations\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
-export const LuEncyclopediaEntryDocument = "query LuEncyclopediaEntry($id: ID!, $language: Locale) {\n  result: authorEncyclopediaEntry(id: $id, language: $language) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n    }\n  }\n}" as const
-export const LuCreateEncyclopediaEntryDocument = "mutation LuCreateEncyclopediaEntry($input: AuthorEncyclopediaEntryCreateInput!) {\n  result: createAuthorEncyclopediaEntry(input: $input) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n    }\n  }\n}" as const
-export const LuUpdateEncyclopediaEntryDocument = "mutation LuUpdateEncyclopediaEntry($id: ID!, $changes: AuthorEncyclopediaEntryChangesInput!) {\n  result: updateAuthorEncyclopediaEntry(id: $id, changes: $changes) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n    }\n  }\n}" as const
-export const LuTranslateEncyclopediaEntryDocument = "mutation LuTranslateEncyclopediaEntry($input: AuthorEncyclopediaEntryTranslationInput!) {\n  result: translateAuthorEncyclopediaEntry(input: $input) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n    }\n  }\n}" as const
-export const LuSetEncyclopediaEntryPublicationDocument = "mutation LuSetEncyclopediaEntryPublication($id: ID!, $published: Boolean!) {\n  result: setAuthorEncyclopediaEntryPublication(id: $id, published: $published) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n    }\n  }\n}" as const
+export const LuUpdateUniverseDocument = "mutation LuUpdateUniverse($universeId: ID!, $input: AuthorUniverseUpdateInput!, $expectedVersion: String) {\n  result: updateAuthorUniverse(\n    universeId: $universeId\n    input: $input\n    expectedVersion: $expectedVersion\n  ) {\n    id\n    title\n    slug\n    language\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n  }\n}" as const
+export const LuEncyclopediaEntriesDocument = "query LuEncyclopediaEntries($universeId: ID!, $first: Int, $after: String) {\n  result: authorEncyclopediaEntries(\n    universeId: $universeId\n    first: $first\n    after: $after\n  ) {\n    nodes {\n      id\n      universeId\n      name\n      categoryId\n      categoryTitle\n      language\n      wip\n      publishedAt\n      updatedAt\n      translations\n      editions {\n        language\n        version\n      }\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
+export const LuEncyclopediaEntryDocument = "query LuEncyclopediaEntry($id: ID!, $language: Locale) {\n  result: authorEncyclopediaEntry(id: $id, language: $language) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n      isAIGenerated\n      aiModel\n    }\n    isAIGenerated\n    aiModel\n    version\n    editions {\n      language\n      version\n    }\n    released {\n      language\n      audience\n      revision\n      publishedAt\n      version\n    }\n  }\n}" as const
+export const LuCreateEncyclopediaEntryDocument = "mutation LuCreateEncyclopediaEntry($input: AuthorEncyclopediaEntryCreateInput!) {\n  result: createAuthorEncyclopediaEntry(input: $input) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n      isAIGenerated\n      aiModel\n    }\n    isAIGenerated\n    aiModel\n    version\n    editions {\n      language\n      version\n    }\n    released {\n      language\n      audience\n      revision\n      publishedAt\n      version\n    }\n  }\n}" as const
+export const LuUpdateEncyclopediaEntryDocument = "mutation LuUpdateEncyclopediaEntry($id: ID!, $changes: AuthorEncyclopediaEntryChangesInput!, $expectedVersion: String) {\n  result: updateAuthorEncyclopediaEntry(\n    id: $id\n    changes: $changes\n    expectedVersion: $expectedVersion\n  ) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n      isAIGenerated\n      aiModel\n    }\n    isAIGenerated\n    aiModel\n    version\n    editions {\n      language\n      version\n    }\n    released {\n      language\n      audience\n      revision\n      publishedAt\n      version\n    }\n  }\n}" as const
+export const LuTranslateEncyclopediaEntryDocument = "mutation LuTranslateEncyclopediaEntry($input: AuthorEncyclopediaEntryTranslationInput!) {\n  result: translateAuthorEncyclopediaEntry(input: $input) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n      isAIGenerated\n      aiModel\n    }\n    isAIGenerated\n    aiModel\n    version\n    editions {\n      language\n      version\n    }\n    released {\n      language\n      audience\n      revision\n      publishedAt\n      version\n    }\n  }\n}" as const
+export const LuSetEncyclopediaEntryPublicationDocument = "mutation LuSetEncyclopediaEntryPublication($id: ID!, $published: Boolean!) {\n  result: setAuthorEncyclopediaEntryPublication(id: $id, published: $published) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n      isAIGenerated\n      aiModel\n    }\n    isAIGenerated\n    aiModel\n    version\n    editions {\n      language\n      version\n    }\n    released {\n      language\n      audience\n      revision\n      publishedAt\n      version\n    }\n  }\n}" as const
+export const LuPublishEncyclopediaEntryDocument = "mutation LuPublishEncyclopediaEntry($input: AuthorEncyclopediaEntryReleaseInput!) {\n  result: publishAuthorEncyclopediaEntry(input: $input) {\n    id\n    universeId\n    name\n    categoryId\n    categoryTitle\n    language\n    wip\n    publishedAt\n    updatedAt\n    translations\n    pronunciation\n    tags\n    summary\n    parent {\n      id\n      name\n    }\n    related {\n      id\n      name\n    }\n    fields {\n      id\n      title\n      type\n      private\n      text\n      isAIGenerated\n      aiModel\n    }\n    isAIGenerated\n    aiModel\n    version\n    editions {\n      language\n      version\n    }\n    released {\n      language\n      audience\n      revision\n      publishedAt\n      version\n    }\n  }\n}" as const
 export const LuDeleteEncyclopediaEntryDocument = "mutation LuDeleteEncyclopediaEntry($id: ID!) {\n  result: deleteAuthorEncyclopediaEntry(id: $id) {\n    id\n    universeId\n  }\n}" as const
 export const LuSeriesDocument = "query LuSeries($universeId: ID!) {\n  result: authorSeries(universeId: $universeId) {\n    id\n    universeId\n    title\n    version\n    storyIds\n    updatedAt\n  }\n}" as const
 export const LuSaveSeriesDocument = "mutation LuSaveSeries($input: AuthorSeriesSaveInput!) {\n  result: saveAuthorSeries(input: $input) {\n    id\n    universeId\n    title\n    version\n    storyIds\n    updatedAt\n  }\n}" as const
