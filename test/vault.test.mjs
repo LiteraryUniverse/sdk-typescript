@@ -163,8 +163,9 @@ function fakeServer() {
 		story: async ({ id }) => (id === 's1' ? state.story : null),
 		chapters: async ({ language }) =>
 			page(
+				// Paged by ID, as the API does, not in reading order.
 				[...state.chapters]
-					.sort((a, b) => a.sequence - b.sequence)
+					.sort((a, b) => b.id.localeCompare(a.id))
 					.map((chapter) => chapterHeader(chapter, language))
 					.filter((chapter) => chapter.hasDraft),
 			),

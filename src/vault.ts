@@ -101,7 +101,12 @@ const render = (yaml: Yaml, meta: Meta, body: string) => {
 			([, value]) =>
 				value !== undefined &&
 				value !== null &&
-				!(Array.isArray(value) && !value.length),
+				!(Array.isArray(value) && !value.length) &&
+				!(
+					typeof value === 'object' &&
+					!Array.isArray(value) &&
+					!Object.keys(value).length
+				),
 		),
 	)
 	return `---\n${yaml.stringify(kept).trimEnd()}\n---\n\n${body.trim()}\n`
@@ -561,6 +566,8 @@ class Sync {
 				after,
 			}),
 		)
+		// The API pages chapters by ID; their order is `sequence`.
+		chapters.sort((a, b) => a.sequence - b.sequence)
 		if (original) this.chapterOrder.set(story.id, chapters)
 		for (const chapter of chapters) {
 			if (!chapter.hasDraft) continue
