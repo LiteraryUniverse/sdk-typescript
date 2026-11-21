@@ -1045,8 +1045,9 @@ function postView(
 			'NOT_FOUND',
 			`The post has no ${language} translation`,
 		)
-	// A translation with its own disclosure speaks for itself; otherwise the original's applies.
-	const ai = text && 'isAIGenerated' in text ? text : original
+	// What readers get (servePost): the translation's own disclosure fields over the original's.
+	const isAIGenerated = Boolean(text?.isAIGenerated ?? original.isAIGenerated)
+	const aiModel = (text?.aiModel || original.aiModel || null) as string | null
 	// A legacy translation without a date shows whenever the original does.
 	const publishedAt =
 		(language && text && !('publishedAt' in text)
@@ -1073,8 +1074,8 @@ function postView(
 			!original.hiddenAt &&
 			!original.deletedAt &&
 			!original.blogModerationReportId,
-		isAIGenerated: ai.isAIGenerated ?? false,
-		aiModel: ai.isAIGenerated ? ai.aiModel || null : null,
+		isAIGenerated,
+		aiModel: isAIGenerated ? aiModel : null,
 		...(format === 'json'
 			? { content: tiptapOf(text?.content as Json | undefined) ?? null }
 			: { markdown: text?.markdown ?? null }),

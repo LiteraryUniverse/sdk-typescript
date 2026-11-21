@@ -548,6 +548,10 @@ test('blog post tools read Markdown per language and map writes to mutateAuthorB
 	const human = await old.call('get-blog-post', { id: 'post', language: 'cs' })
 	assert.equal(human.structuredContent.isAIGenerated, false)
 	assert.equal(human.structuredContent.aiModel, null)
+	// A translation marked AI-generated without a model of its own shows the original's, as readers see it.
+	legacy.data.i18n.cs.isAIGenerated = true
+	const machine = await old.call('get-blog-post', { id: 'post', language: 'cs' })
+	assert.equal(machine.structuredContent.aiModel, 'model')
 	assert.equal(german.structuredContent.live, true)
 	legacy.data.hiddenAt = '2026-01-01T00:00:00Z'
 	const held = await old.call('get-blog-post', { id: 'post' })
