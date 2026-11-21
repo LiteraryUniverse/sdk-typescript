@@ -531,11 +531,14 @@ Tools are grouped in categories; `tools` selects categories and/or tool names
 `get-chapter-draft`), `stories-write` (`save-chapter-draft`, `create-chapter`,
 `update-story`, `set-story-visibility`, `rename-chapter`, `reorder-chapters`,
 `remove-chapter`), `publish` (`publish-chapter`, which does nothing without
-`confirm: true`, and `publish-comic-chapter`), `universes`, `universes-write`,
+`confirm: true`, `publish-comic-chapter`, `publish-blog-post` and
+`unpublish-blog-post`), `universes`, `universes-write`,
 `comics` (`list-comics`, `get-comic`, `list-comic-chapters`, `list-comic-pages`),
 `comics-write` (comic, chapter, page and layer writes; `upload-comic-pages` and
 `replace-comic-page-image` take local paths, are registered only with
-`readLocalFile`, and need the optional `sharp` peer), `images` (`set-cover` only with `readLocalFile`) and `docs` (`search-lu-docs`, `fetch-lu-docs`, usable without
+`readLocalFile`, and need the optional `sharp` peer), `blogs` (`list-blogs`,
+`list-blog-posts`, `get-blog-post`), `blogs-write` (`create-blog-post`,
+`update-blog-post`, `translate-blog-post`), `images` (`set-cover` only with `readLocalFile`) and `docs` (`search-lu-docs`, `fetch-lu-docs`, usable without
 login; they read the site's `llms.txt` pages and help articles under `docsBaseUrl`). `selectTools`
 validates a selection without a server. Every tool carries a title, a zod input
 schema and the four MCP annotations; results carry `structuredContent` and a
@@ -574,3 +577,45 @@ await client.mutateBlog({
 Edits to published pages and saved menus are live immediately. A stale version
 fails with `VERSION_CONFLICT`; read again and review the changes. System pages,
 deletions, unpublishing and homepage changes remain web-editor actions.
+
+## Blog posts
+
+`client.blogs()` lists the blogs the credential may post to (`canPost`) or
+manage (`canManage`): the personal blog, organization blogs where the person
+holds the blog post permission, and blogs delegated to them.
+
+`client.blogPosts({blogId, first?, after?})` lists a blog's posts, drafts
+included, sorted by ID; `client.blogPost({id})` reads one. Each returns
+documents with `id`, opaque `version` and `data`, where title, intro and tags
+are plain text and `markdown` renders each body (`i18n.<code>.markdown` for
+translations). Reads need `blog:read` and permission to post to that blog.
+
+`client.mutateBlogPost(input)` needs `blog:write` and runs the web editor's save
+as the signed-in person. `action` is `save` (without `postId` it creates a
+draft, with `expectedVersion: null`), `translate` (with `language`), `publish`
+(now, or at `publishAt`; a live post keeps its date) or `unpublish`. `post`
+takes `title`, `slug`, `intro`, the body as one of `markdown` and `content`
+(Tiptap JSON), `tags`, `language`, `coverFileId` (a `blog-image` upload for
+this blog; null removes it), `isAIGenerated` and `aiModel`. Omitted fields keep
+their value, and a fan-club gate stays as set in the web editor. An account
+barred from publishing gets `FORBIDDEN` on `publish`.
+
+```ts
+const post = await client.mutateBlogPost({
+  blogId: 'BLOG_ID', action: 'save', expectedVersion: null,
+  post: {title: 'Launch day', slug: 'launch-day', markdown: 'We are **live**.'},
+})
+await client.mutateBlogPost({
+  blogId: 'BLOG_ID', postId: post.id, action: 'publish',
+  expectedVersion: post.version,
+})
+```
+
+A create whose slug the blog already uses fails with `CONFLICT` naming that
+post, so a retried create never posts twice. A stale version fails with
+`VERSION_CONFLICT`. Markdown edits of a body that holds blog widgets or other
+content Markdown cannot carry, or that is stored as HTML only, fail with
+`MARKDOWN_UNSUPPORTED`. Organization
+keys can read their own organization blog's posts but not write them: a post
+is signed by a person. Fan-club tiers, podcasts and literary
+commentary stay in the web editor.

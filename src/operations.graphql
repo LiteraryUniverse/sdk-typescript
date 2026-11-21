@@ -167,6 +167,18 @@ query LuBlogMenus($blogId: ID!) {
 mutation LuMutateBlog($input: AuthorBlogMutationInput!) {
   result: mutateAuthorBlog(input: $input) { id version data }
 }
+query LuBlogs {
+  result: authorBlogs { id type ownerId name slug language canPost canManage }
+}
+query LuBlogPosts($blogId: ID!, $first: Int, $after: ID) {
+  result: authorBlogPosts(blogId: $blogId, first: $first, after: $after) { id version data }
+}
+query LuBlogPost($id: ID!) {
+  result: authorBlogPost(id: $id) { id version data }
+}
+mutation LuMutateBlogPost($input: AuthorBlogPostMutationInput!) {
+  result: mutateAuthorBlogPost(input: $input) { id version data }
+}
 
 query LuComics($first: Int, $after: String) {
   result: authorComics(first: $first, after: $after) {
