@@ -330,6 +330,60 @@ const publish: Record<string, Spec> = {
 				? JSON.stringify(result, null, 2)
 				: `Nothing published. Call publish-comic-chapter again with confirm: true to publish ${JSON.stringify(result.wouldPublish)}.`,
 	}),
+	'publish-blog-post': tool({
+		title: 'Publish blog post',
+		description:
+			'Publish a post or one translation now or at publishAt; a live post keeps its date. Without confirm: true nothing happens and the request is echoed back; ask the author first.',
+		input: {
+			blogId: z.string().min(1),
+			postId: id,
+			expectedVersion: z.string(),
+			language: z
+				.string()
+				.optional()
+				.describe('Publish only this translation'),
+			publishAt: z
+				.string()
+				.optional()
+				.describe('ISO 8601 with timezone; now when omitted'),
+			confirm: z.boolean().default(false),
+		},
+		annotations: hints(false, false, true, true),
+		run: async (client, { confirm, ...input }) => {
+			if (!confirm) return { published: false, wouldPublish: input }
+			const post = await client.mutateBlogPost({ ...input, action: 'publish' })
+			return { published: true, ...postSummary(post) }
+		},
+		text: (result) =>
+			result.published
+				? JSON.stringify(result, null, 2)
+				: `Nothing published. Call publish-blog-post again with confirm: true to publish ${JSON.stringify(result.wouldPublish)}.`,
+	}),
+	'unpublish-blog-post': tool({
+		title: 'Unpublish blog post',
+		description:
+			'Take a post or one translation back to draft. Without confirm: true nothing happens; ask the author first.',
+		input: {
+			blogId: z.string().min(1),
+			postId: id,
+			expectedVersion: z.string(),
+			language: z.string().optional(),
+			confirm: z.boolean().default(false),
+		},
+		annotations: hints(false, false, true, true),
+		run: async (client, { confirm, ...input }) => {
+			if (!confirm) return { unpublished: false, wouldUnpublish: input }
+			const post = await client.mutateBlogPost({
+				...input,
+				action: 'unpublish',
+			})
+			return { unpublished: true, ...postSummary(post) }
+		},
+		text: (result) =>
+			result.unpublished
+				? JSON.stringify(result, null, 2)
+				: `Nothing changed. Call unpublish-blog-post again with confirm: true to unpublish ${JSON.stringify(result.wouldUnpublish)}.`,
+	}),
 }
 
 const layerItem = z.object({
@@ -969,6 +1023,199 @@ const docs: Record<string, Spec> = {
 	}),
 }
 
+type BlogDocument = { id: string; version: string; data: JsonValue }
+type PostFields = Record<string, unknown> & { i18n?: Record<string, Json> }
+/** One language of a post: its text as Markdown, the Tiptap JSON only on request. */
+function postView(
+	post: BlogDocument,
+	language?: string,
+	format: 'markdown' | 'json' = 'markdown',
+) {
+	const data = post.data as PostFields
+	const { i18n, content, markdown, ...original } = data
+	const text = language ? i18n?.[language] : data
+	if (language && !text)
+		throw new LiteraryUniverseApiError(
+			'NOT_FOUND',
+			`The post has no ${language} translation`,
+		)
+	return {
+		id: post.id,
+		version: post.version,
+		blogId: original.blogId,
+		originalLanguage: original.language,
+		translations: Object.keys(i18n ?? {}),
+		cover: original.cover ?? null,
+		restricted: Boolean(original.restrictions),
+		language: language ?? original.language,
+		title: text?.title,
+		slug: text?.slug,
+		intro: text?.intro,
+		tags: text?.tags ?? [],
+		publishedAt: text?.publishedAt ?? null,
+		isAIGenerated: text?.isAIGenerated ?? original.isAIGenerated ?? false,
+		...(format === 'json'
+			? { content: (text?.content as Json | undefined)?.content ?? null }
+			: { markdown: text?.markdown ?? null }),
+	}
+}
+function postSummary(post: BlogDocument): Json {
+	const summary: Json = postView(post)
+	delete summary.markdown
+	return summary
+}
+const blogId = z.string().min(1).describe('From list-blogs')
+const postText = {
+	title: z.string().max(200).optional(),
+	slug: z.string().max(200).optional().describe('URL segment, lowercase'),
+	intro: z.string().max(500).optional().describe('Teaser shown in lists'),
+	markdown: z.string().optional().describe('The body as Markdown'),
+	tags: z.array(z.string()).max(30).optional(),
+}
+const disclosure = {
+	isAIGenerated: z
+		.boolean()
+		.optional()
+		.describe('Set only as the author says; shown to readers'),
+	aiModel: z.string().optional(),
+}
+
+const blogs: Record<string, Spec> = {
+	'list-blogs': tool({
+		title: 'List blogs',
+		description:
+			'Blogs this account may post to (canPost) or manage: personal, organization and delegated.',
+		input: {},
+		annotations: READ,
+		run: async (client) => ({ blogs: await client.blogs() }),
+	}),
+	'list-blog-posts': tool({
+		title: 'List blog posts',
+		description:
+			'A page of a blog\'s posts, drafts included, oldest ID first; pass the last id as after for the next page.',
+		input: {
+			blogId,
+			first: page.first,
+			after: z.string().optional().describe('id of the last post read'),
+		},
+		annotations: READ,
+		run: async (client, args) => ({
+			posts: (await client.blogPosts(args)).map(postSummary),
+		}),
+	}),
+	'get-blog-post': tool({
+		title: 'Get blog post',
+		description:
+			'A post with its body as Markdown (or Tiptap JSON) and the version to edit it at.',
+		input: {
+			id,
+			language: z
+				.string()
+				.optional()
+				.describe('A translation code; the original when omitted'),
+			format: z.enum(['markdown', 'json']).default('markdown'),
+		},
+		annotations: READ,
+		run: async (client, { id, language, format }) =>
+			postView(await client.blogPost({ id }), language, format),
+	}),
+}
+
+const blogsWrite: Record<string, Spec> = {
+	'create-blog-post': tool({
+		title: 'Create blog post',
+		description:
+			'Save a new unpublished post; a slug the blog already uses fails with CONFLICT naming that post.',
+		input: {
+			blogId,
+			...postText,
+			title: z.string().min(1).max(200),
+			slug: z.string().min(1).max(200).describe('URL segment, lowercase'),
+			language: z
+				.string()
+				.optional()
+				.describe("Content code such as en; the blog's language when omitted"),
+			coverFileId: z
+				.string()
+				.optional()
+				.describe('fileId of a blog-image upload'),
+			...disclosure,
+		},
+		annotations: CREATE,
+		run: async (client, { blogId, ...post }) =>
+			postView(
+				await client.mutateBlogPost({
+					blogId,
+					action: 'save',
+					expectedVersion: null,
+					post,
+				}),
+			),
+	}),
+	'update-blog-post': tool({
+		title: 'Update blog post',
+		description:
+			'Change the original at expectedVersion; only the given fields change. Edits to a published post are live at once.',
+		input: {
+			blogId,
+			postId: id,
+			expectedVersion: z.string(),
+			...postText,
+			content: z
+				.record(z.string(), z.unknown())
+				.optional()
+				.describe('Tiptap JSON instead of markdown, as get-blog-post format json returns'),
+			language: z.string().optional().describe("Move the original's language"),
+			coverFileId: z
+				.string()
+				.nullable()
+				.optional()
+				.describe('fileId of a blog-image upload; null removes the cover'),
+			...disclosure,
+		},
+		annotations: WRITE,
+		run: async (
+			client,
+			{ blogId, postId, expectedVersion, content, ...post },
+		) =>
+			postView(
+				await client.mutateBlogPost({
+					blogId,
+					postId,
+					action: 'save',
+					expectedVersion,
+					post: { ...post, content: content as JsonValue | undefined },
+				}),
+			),
+	}),
+	'translate-blog-post': tool({
+		title: 'Translate blog post',
+		description:
+			"Save one language's text of a post at expectedVersion; a new translation needs title and markdown, an existing one changes only the given fields.",
+		input: {
+			blogId,
+			postId: id,
+			expectedVersion: z.string(),
+			language: z.string().describe('Content code such as cs'),
+			...postText,
+			...disclosure,
+		},
+		annotations: WRITE,
+		run: async (client, { blogId, postId, expectedVersion, language, ...post }) =>
+			postView(
+				await client.mutateBlogPost({
+					blogId,
+					postId,
+					action: 'translate',
+					expectedVersion,
+					language,
+					post,
+				}),
+				language,
+			),
+	}),
+}
+
 const account: Record<string, Spec> = {
 	'get-identity': tool({
 		title: 'Get identity',
@@ -989,6 +1236,8 @@ const CATEGORIES = {
 	'universes-write': universesWrite,
 	comics,
 	'comics-write': comicsWrite,
+	blogs,
+	'blogs-write': blogsWrite,
 	images,
 	docs,
 }
@@ -1011,6 +1260,8 @@ export const DEFAULT_TOOL_SELECTION: readonly string[] = [
 	'universes-write',
 	'comics',
 	'comics-write',
+	'blogs',
+	'blogs-write',
 	'images',
 	'docs',
 ]

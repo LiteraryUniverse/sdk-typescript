@@ -74,7 +74,11 @@ test('selectTools expands categories and names, dedupes, and rejects unknown ent
 	assert.deepEqual(selectTools(['publish']), [
 		'publish-chapter',
 		'publish-comic-chapter',
+		'publish-blog-post',
+		'unpublish-blog-post',
 	])
+	assert.ok(defaults.includes('create-blog-post'))
+	assert.ok(!defaults.includes('publish-blog-post'))
 	assert.deepEqual(selectTools(['get-story', 'stories']), [
 		'get-story',
 		'list-stories',
@@ -83,7 +87,7 @@ test('selectTools expands categories and names, dedupes, and rejects unknown ent
 	])
 	const all = selectTools(['all'])
 	assert.equal(all.length, Object.values(TOOL_CATEGORIES).flat().length)
-	assert.equal(all.length, 52)
+	assert.equal(all.length, 60)
 	assert.throws(() => selectTools(['nope']), {
 		code: 'INVALID_CONFIGURATION',
 		message: 'Unknown tool or category: nope',
@@ -97,7 +101,7 @@ test('every registered tool carries a title and all four annotation hints', asyn
 		readLocalFile: async () => new Uint8Array([1]),
 	})
 	const { tools } = await client.listTools()
-	assert.equal(tools.length, 52)
+	assert.equal(tools.length, 60)
 	assert.deepEqual(
 		tools.map((tool) => tool.name).sort(),
 		[...registered].sort(),
@@ -346,6 +350,8 @@ test('the CommonJS build exposes the same MCP entry', () => {
 	assert.deepEqual(mcp.selectTools(['publish']), [
 		'publish-chapter',
 		'publish-comic-chapter',
+		'publish-blog-post',
+		'unpublish-blog-post',
 	])
 })
 
@@ -481,4 +487,111 @@ test('publish-comic-chapter without confirm echoes the request and sends nothing
 		published: false,
 		wouldPublish: { id: 'chapter', audience: 'READERS' },
 	})
+})
+
+const blogPost = {
+	id: 'post',
+	version: 'v1',
+	data: {
+		_id: 'post',
+		blogId: 'blog',
+		title: 'Tom & Jerry',
+		slug: 'tom-and-jerry',
+		intro: 'Cats',
+		language: 'en',
+		tags: ['cats'],
+		markdown: 'Hi **there**',
+		content: { content: { type: 'doc', content: [] }, html: '<p>Hi</p>' },
+		publishedAt: null,
+		i18n: {
+			cs: { title: 'Tom a Jerry', slug: 'tom', markdown: 'Ahoj', publishedAt: '2026-01-01T00:00:00Z' },
+		},
+	},
+}
+
+test('blog post tools read Markdown per language and map writes to mutateAuthorBlogPost', async () => {
+	const { call, sent } = await connect({ tools: ['blogs', 'blogs-write'] }, (request) =>
+		Response.json({
+			data: {
+				result:
+					request.operationName === 'LuBlogs'
+						? [{ id: 'blog', canPost: true, canManage: false }]
+						: request.operationName === 'LuBlogPosts'
+							? [blogPost]
+							: blogPost,
+			},
+		}),
+	)
+	const blogs = await call('list-blogs')
+	assert.equal(blogs.structuredContent.blogs[0].id, 'blog')
+	const list = await call('list-blog-posts', { blogId: 'blog' })
+	assert.deepEqual(list.structuredContent.posts[0].translations, ['cs'])
+	assert.equal(list.structuredContent.posts[0].markdown, undefined)
+	const czech = await call('get-blog-post', { id: 'post', language: 'cs' })
+	assert.equal(czech.structuredContent.markdown, 'Ahoj')
+	assert.equal(czech.structuredContent.publishedAt, '2026-01-01T00:00:00Z')
+	const missing = await call('get-blog-post', { id: 'post', language: 'de' })
+	assert.equal(missing.isError, true)
+
+	await call('create-blog-post', {
+		blogId: 'blog',
+		title: 'New',
+		slug: 'new',
+		markdown: '# Hi',
+	})
+	await call('update-blog-post', {
+		blogId: 'blog',
+		postId: 'post',
+		expectedVersion: 'v1',
+		coverFileId: null,
+	})
+	await call('translate-blog-post', {
+		blogId: 'blog',
+		postId: 'post',
+		expectedVersion: 'v1',
+		language: 'cs',
+		title: 'Tom a Jerry',
+	})
+	const writes = sent.filter((request) => request.operationName === 'LuMutateBlogPost')
+	assert.deepEqual(
+		writes.map(({ variables }) => variables.input),
+		[
+			{
+				blogId: 'blog',
+				action: 'save',
+				expectedVersion: null,
+				post: { title: 'New', slug: 'new', markdown: '# Hi' },
+			},
+			{
+				blogId: 'blog',
+				postId: 'post',
+				action: 'save',
+				expectedVersion: 'v1',
+				post: { coverFileId: null },
+			},
+			{
+				blogId: 'blog',
+				postId: 'post',
+				action: 'translate',
+				expectedVersion: 'v1',
+				language: 'cs',
+				post: { title: 'Tom a Jerry' },
+			},
+		],
+	)
+})
+
+test('publish-blog-post without confirm echoes the request and sends nothing', async () => {
+	const { call, sent } = await connect({ tools: ['publish'] }, () =>
+		Response.json({ data: { result: blogPost } }),
+	)
+	const input = { blogId: 'blog', postId: 'post', expectedVersion: 'v1' }
+	const dry = await call('publish-blog-post', input)
+	assert.equal(dry.structuredContent.published, false)
+	assert.equal(sent.length, 0)
+	const live = await call('publish-blog-post', { ...input, confirm: true })
+	assert.equal(live.structuredContent.published, true)
+	assert.equal(sent[0].variables.input.action, 'publish')
+	await call('unpublish-blog-post', { ...input, confirm: true })
+	assert.equal(sent[1].variables.input.action, 'unpublish')
 })

@@ -81,6 +81,15 @@ type Query {
 
   """The saved series of a universe."""
   authorSeries(universeId: ID!): [AuthorSeries!]!
+
+  """
+  Blogs the credential may post to: personal, organization and delegated.
+  """
+  authorBlogs: [AuthorBlog!]!
+
+  """Posts of a blog, drafts included, with Markdown of each body."""
+  authorBlogPosts(blogId: ID!, first: Int = 25, after: ID): [AuthorBlogDocument!]!
+  authorBlogPost(id: ID!): AuthorBlogDocument!
   authorBlogPages(blogId: ID!, first: Int = 25, after: ID): [AuthorBlogDocument!]!
   authorBlogMenus(blogId: ID!): [AuthorBlogDocument!]!
   authorComics(first: Int = 25, after: String): AuthorComicConnection!
@@ -210,6 +219,11 @@ type Mutation {
   """
   updateAuthorStory(storyId: ID!, input: AuthorStoryUpdateInput!): AuthorStoryHeader!
   mutateAuthorBlog(input: AuthorBlogMutationInput!): AuthorBlogDocument!
+
+  """
+  Create, edit, translate, publish or unpublish a blog post as the signed-in person.
+  """
+  mutateAuthorBlogPost(input: AuthorBlogPostMutationInput!): AuthorBlogDocument!
 
   """Create a draft comic owned by the credential's person. Not idempotent."""
   createAuthorComic(input: AuthorComicCreateInput!): AuthorComic!
@@ -724,7 +738,7 @@ input AuthorStoryUpdateInput {
 }
 
 """
-Private stored page/menu data including translations, plus an opaque concurrency token.
+Private stored post/page/menu data including translations, plus an opaque concurrency token.
 """
 type AuthorBlogDocument {
   id: ID!
@@ -745,6 +759,60 @@ input AuthorBlogMutationInput {
   items: [JSON!]
   settings: JSON
   entries: JSON
+}
+
+"""A blog the credential may post to or manage."""
+type AuthorBlog {
+  id: ID!
+
+  """user, organization, universe or group"""
+  type: String!
+  ownerId: ID!
+  name: String
+  slug: String
+  language: String
+
+  """May create, edit, translate and publish posts."""
+  canPost: Boolean!
+
+  """May edit pages and menus."""
+  canManage: Boolean!
+}
+
+"""
+Title, slug, intro and tags are plain text. Give the body as exactly one of
+markdown and content (Tiptap JSON). Omitted fields keep their stored value.
+"""
+input AuthorBlogPostFields {
+  title: String
+  slug: String
+  intro: String
+  markdown: String
+  content: JSON
+  tags: [String!]
+
+  """The original's language; translations are saved with translate."""
+  language: Locale
+
+  """A blog-image upload's file ID; null removes the cover."""
+  coverFileId: ID
+  isAIGenerated: Boolean
+  aiModel: String
+}
+
+"""
+action: save (create without postId, or edit), translate (needs language),
+publish (publishAt schedules; with language publishes that translation) or
+unpublish. expectedVersion is null for a new post, otherwise the version last read.
+"""
+input AuthorBlogPostMutationInput {
+  blogId: ID!
+  postId: ID
+  action: String!
+  expectedVersion: String
+  language: Locale
+  post: AuthorBlogPostFields
+  publishAt: DateTime
 }
 
 """
