@@ -1406,7 +1406,32 @@ class Sync {
 		if (!same)
 			refuseUnsafeSections(note.body, parsed.fields, current?.fields ?? [])
 		if (language) {
+			// The server finds a section by its original title: map each heading
+			// through this edition's sections as they are now, by ID.
 			const titles = (note.meta.lu_fields ?? {}) as Record<string, string>
+			const source = fields.length
+				? await client.encyclopediaEntry({ id })
+				: undefined
+			const lower = (title: string) => title.trim().toLowerCase()
+			const originalTitle = (title: string) => {
+				const field = current?.fields.find(
+					(item) => lower(item.title) === lower(title),
+				)
+				return (
+					(field && source?.fields.find((item) => item.id === field.id)?.title) ??
+					titles[title] ??
+					title
+				)
+			}
+			// Two headings naming one section would leave only the last text.
+			const targets = parsed.fields.map((field) =>
+				lower(originalTitle(field.title)),
+			)
+			if (targets.some((title, index) => targets.indexOf(title) !== index))
+				throw new LiteraryUniverseApiError(
+					'BAD_USER_INPUT',
+					'Two headings in this translation name the same section; keep one',
+				)
 			return client.translateEncyclopediaEntry({
 				id,
 				language,
@@ -1415,7 +1440,7 @@ class Sync {
 				pronunciation: str(note.meta.pronunciation),
 				summary,
 				fields: fields.map((field) => ({
-					title: titles[field.title] ?? field.title,
+					title: originalTitle(field.title),
 					translatedTitle: field.title,
 					text: field.text,
 				})),

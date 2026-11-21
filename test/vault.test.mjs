@@ -1145,3 +1145,57 @@ test('an AI model set on a chapter without one reaches its other languages', asy
 	await sync()
 	assert.deepEqual(server.calls, [])
 })
+
+test('a translation heading naming another section by its original title is refused', async () => {
+	server.state.entry.fields.push({
+		id: 'f3',
+		title: 'Ship',
+		type: 'textarea',
+		private: false,
+		text: 'Nautilus.',
+	})
+	const czech = {
+		...server.state.entry,
+		language: 'cs',
+		summary: 'Kapitán.',
+		version: 'cv1',
+		released: [],
+		fields: [
+			{ id: 'f1', title: 'Životopis', type: 'textarea', private: false, text: 'Princ.' },
+			{ id: 'f3', title: 'Loď', type: 'textarea', private: false, text: 'Nautilus.' },
+		],
+	}
+	const list = server.client.encyclopediaEntries
+	server.client.encyclopediaEntries = async (input) => {
+		const result = await list(input)
+		result.nodes[0].editions.push({ language: 'cs', version: 'cv1', releasedRevision: null })
+		return result
+	}
+	server.client.encyclopediaEntry = async ({ language }) =>
+		language === 'cs' ? czech : server.state.entry
+	server.client.translateEncyclopediaEntry = async (input) => {
+		server.calls.push(['translateEncyclopediaEntry', input])
+		return czech
+	}
+	await sync()
+	const path = 'Encyclopedia/Characters/Nemo.cs.md'
+	edit(path, ({ meta, body }) => ({
+		meta,
+		body: body.replace('Princ.', 'Princ, později kapitán.\n\n## Ship\n\nJiný.'),
+	}))
+	server.calls.length = 0
+	const report = await sync()
+	assert.match(report.failures.join(), /name the same section/)
+	assert.ok(!server.calls.some(([name]) => name === 'translateEncyclopediaEntry'))
+	// A plain edit still maps the heading to its original title by ID.
+	edit(path, ({ meta, body }) => ({
+		meta,
+		body: body.replace('\n\n## Ship\n\nJiný.', ''),
+	}))
+	server.calls.length = 0
+	await sync()
+	const [, input] = server.calls.find(([name]) => name === 'translateEncyclopediaEntry')
+	assert.deepEqual(input.fields, [
+		{ title: 'Biography', translatedTitle: 'Životopis', text: 'Princ, později kapitán.' },
+	])
+})
