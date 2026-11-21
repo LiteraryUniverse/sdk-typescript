@@ -185,27 +185,49 @@ const privateTitles = (body: string) =>
 		),
 	)
 /**
- * The API makes every new section public: a new one marked private, or one
- * right after a private section (a `## ` line in private text), is refused.
+ * Sections the API could get wrong are refused before any text is sent: it
+ * makes every new section public, keeps an existing one's privacy, and finds
+ * sections by title regardless of case. So a section marked private that is
+ * public there, a new section that is private or follows a private one (a
+ * `## ` line in private text), and a title used twice are refused.
  */
-function refuseNewPrivate(
+function refuseUnsafeSections(
 	body: string,
 	fields: { title: string }[],
-	known: Set<string>,
+	current: { title: string; type: string; private: boolean }[],
 ) {
-	const hidden = privateTitles(body)
-	if (
-		fields.some(
-			(field, index) =>
-				!known.has(field.title) &&
-				(hidden.has(field.title) ||
-					(index > 0 && hidden.has(fields[index - 1].title))),
-		)
+	const norm = (title: string) => title.trim().toLowerCase()
+	const server = new Map(
+		current
+			.filter((field) => TEXT_FIELDS.includes(field.type))
+			.map((field) => [norm(field.title), field]),
 	)
-		throw new LiteraryUniverseApiError(
-			'BAD_USER_INPUT',
-			'New sections are public on Literary Universe: add a private section on the site, and keep lines starting with "## " out of private text',
+	const marked = new Set([...privateTitles(body)].map(norm))
+	const hidden = (title: string) =>
+		marked.has(norm(title)) || Boolean(server.get(norm(title))?.private)
+	const titles = fields.map((field) => norm(field.title))
+	const refuse = (message: string) => {
+		throw new LiteraryUniverseApiError('BAD_USER_INPUT', message)
+	}
+	if (titles.some((title, index) => titles.indexOf(title) !== index))
+		refuse(
+			'Two sections share a title (a line starting with "## " inside a section?); make the titles unique',
 		)
+	for (const [index, field] of fields.entries()) {
+		const known = server.get(norm(field.title))
+		if (known && marked.has(norm(field.title)) && !known.private)
+			refuse(
+				`"${field.title}" is public on Literary Universe; change a section's privacy on the site`,
+			)
+		if (
+			!known &&
+			(marked.has(norm(field.title)) ||
+				(index > 0 && hidden(fields[index - 1].title)))
+		)
+			refuse(
+				`New sections are public on Literary Universe, and "${field.title}" is new: add private sections on the site, and add public ones above any private section`,
+			)
+	}
 }
 
 // --- Engine --------------------------------------------------------------
@@ -305,6 +327,8 @@ class Sync {
 	texts = new Map<string, string>()
 	/** Notes the pull left out for their language; they are not pushed either. */
 	skipped = new Set<string>()
+	/** Chapter notes renamed on both sides; their title waits for the next sync. */
+	heldTitles = new Set<Note>()
 	/** Notes typed into while a write was due; they sit out the rest of this sync. */
 	deferred = new Set<Note>()
 	/** Stories and entries the universe's pull listed; only they push. */
@@ -533,10 +557,20 @@ class Sync {
 			this.report.updated.push(note.path)
 			return true
 		}
-		const copy = join(
+		// The copy from an earlier conflict is replaced; anyone else's file is not.
+		let copy = join(
 			dirname(note.path),
 			`${basename(note.path)}${CONFLICT_SUFFIX}.md`,
 		)
+		for (
+			let count = 2;
+			copy !== note.meta.lu_conflict && (await this.o.files.exists(copy));
+			count++
+		)
+			copy = join(
+				dirname(note.path),
+				`${basename(note.path)}${CONFLICT_SUFFIX} ${count}.md`,
+			)
 		const shown = Object.fromEntries(
 			Object.entries(server.meta).filter(([name]) => !name.startsWith('lu_')),
 		)
@@ -784,8 +818,22 @@ class Sync {
 				note.meta.title = chapter.title
 				note.meta.lu_meta = serverMeta
 				await this.save(note)
+			} else if (
+				serverMeta !== base &&
+				localMeta !== base &&
+				str(note.meta.title) !== chapter.title
+			) {
+				// Renamed on both sides: keep this title, say so, and send it only
+				// on the next sync, so the author can take the site's instead.
+				this.report.conflicts.push(
+					`${story.title} / ${chapter.title}: renamed "${str(note.meta.title)}" here and "${chapter.title}" on Literary Universe; sync again to keep "${str(note.meta.title)}"`,
+				)
+				this.heldTitles.add(note)
+				note.meta.lu_meta = serverMeta
+				await this.save(note)
 			}
 		}
+		if (note && this.deferred.has(note)) return
 		const fresh =
 			!note ||
 			!note.meta.lu_updated ||
@@ -818,6 +866,8 @@ class Sync {
 					sequence: original ? (note?.meta.sequence ?? sequence) : undefined,
 					lu_meta: note?.meta.lu_meta ?? serverMeta,
 					ai_model: draft.aiModel ?? undefined,
+					// The chapter's model as last synced: a note sends its own only if changed.
+					lu_ai: draft.aiModel ?? undefined,
 				},
 				body: draft.markdown ?? '',
 				version: draft.version,
@@ -1114,7 +1164,12 @@ class Sync {
 				title,
 				original ? note.meta.sequence : 0,
 			)
-			if (note.meta.lu_meta && metaHash !== note.meta.lu_meta && title) {
+			if (
+				note.meta.lu_meta &&
+				metaHash !== note.meta.lu_meta &&
+				title &&
+				!this.heldTitles.has(note)
+			) {
 				const header = this.chapterOrder
 					.get(str(note.meta.lu_story))
 					?.find((chapter) => chapter.id === id)
@@ -1137,12 +1192,18 @@ class Sync {
 			if (hash === note.meta.lu_hash) return
 			const expectedVersion = str(note.meta.lu_version)
 			const language = str(note.meta.lu_language)
+			// The model is the chapter's: a note sends it only when the author
+			// changed it there, so another language's edit can't undo it.
+			const changed = (item: Note) =>
+				item.meta.lu_ai === undefined ||
+				str(item.meta.ai_model) !== str(item.meta.lu_ai)
+			const model = changed(note) ? aiModel : undefined
 			const saved = await client.saveDraft({
 				id,
 				language,
 				expectedVersion,
 				markdown: note.body,
-				aiModel,
+				aiModel: model,
 				operationId: await sha256(
 					`${id}:${language}:${expectedVersion}:${hash}`,
 				),
@@ -1150,6 +1211,7 @@ class Sync {
 			note.meta.lu_version = saved.version
 			note.meta.lu_hash = hash
 			note.meta.lu_updated = saved.draft.updatedAt
+			if (model) note.meta.lu_ai = model
 			await this.save(note)
 			this.report.pushed.push(note.path)
 			// The server took expectedVersion, so no other language changed meanwhile.
@@ -1158,17 +1220,16 @@ class Sync {
 					other !== note &&
 					key.startsWith(`chapter:${id}:`) &&
 					str(other.meta.lu_version) === expectedVersion &&
-					this.inScope('chapter', other, key)
+					this.inScope('chapter', other, key) &&
+					!this.deferred.has(other)
 				) {
-					// The disclosure covers the whole chapter: an unedited language
-					// takes it; an edited one pushes its own next.
-					if (
-						aiModel &&
-						str(other.meta.ai_model) !== aiModel &&
-						(await this.chapterHash(other)) === other.meta.lu_hash
-					) {
-						other.meta.ai_model = aiModel
-						other.meta.lu_hash = await this.chapterHash(other)
+					// A language whose model the author left alone takes the new one.
+					if (model && !changed(other)) {
+						const unedited =
+							(await this.chapterHash(other)) === other.meta.lu_hash
+						other.meta.ai_model = model
+						other.meta.lu_ai = model
+						if (unedited) other.meta.lu_hash = await this.chapterHash(other)
 					}
 					other.meta.lu_version = saved.version
 					await this.save(other)
@@ -1358,12 +1419,7 @@ class Sync {
 				})),
 			})
 		}
-		if (!same)
-			refuseNewPrivate(
-				note.body,
-				parsed.fields,
-				new Set(current?.fields.map((field) => field.title)),
-			)
+		if (!same) refuseUnsafeSections(note.body, parsed.fields, current?.fields ?? [])
 		const parent = unlink(note.meta.parent)
 		const related = list(note.meta.related).map(unlink)
 		// The folder is the category as a file name; send it only when the note moved.
@@ -1407,7 +1463,8 @@ class Sync {
 			this.notes.get(this.key('chapter', chapter.id, chapter.language)),
 		)
 		// A note waiting on its conflict copy neither moves nor is moved.
-		const held = (note?: Note) => Boolean(note?.meta.lu_conflict)
+		const held = (note?: Note) =>
+			Boolean(note?.meta.lu_conflict || (note && this.deferred.has(note)))
 		// Moved: a numeric `sequence` other than the chapter's place. A new title is no move.
 		const targets = chapters.map((chapter, index) => {
 			const sequence = notes[index]?.meta.sequence
@@ -1515,6 +1572,7 @@ class Sync {
 				lu_story: storyId,
 				lu_language: created.language,
 				lu_version: created.version,
+				lu_ai: aiModel,
 				lu_hash: await this.chapterHash(note),
 				lu_updated: draft.updatedAt,
 				title: created.title,
@@ -1538,7 +1596,7 @@ class Sync {
 			if (this.skipped.has(this.key('universe', this.o.scope.universeId)))
 				return
 			const parsed = parseEntryBody(note.body)
-			refuseNewPrivate(note.body, parsed.fields, new Set())
+			refuseUnsafeSections(note.body, parsed.fields, [])
 			const name = str(note.meta.name) || basename(note.path)
 			const parent = unlink(note.meta.parent)
 			const entry = await client.createEncyclopediaEntry({

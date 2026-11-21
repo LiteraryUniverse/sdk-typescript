@@ -1010,3 +1010,87 @@ test('a title typed during a sync that brings one from the site waits', async ()
 	assert.equal(note(path).meta.title, 'Dva')
 	assert.ok(!server.calls.some(([name]) => name === 'renameChapter'))
 })
+
+test('a translation edit does not undo a new AI model set in the original', async () => {
+	server.state.chapters[0].aiModel = 'model-x'
+	await sync()
+	edit('Stories/Balance/01 One.md', ({ meta, body }) => ({
+		meta: { ...meta, ai_model: 'model-y' },
+		body: `${body} More.`,
+	}))
+	edit('Stories/Balance/01 Jedna.cs.md', ({ meta, body }) => ({
+		meta,
+		body: `${body} Víc.`,
+	}))
+	const report = await sync()
+	assert.deepEqual([report.conflicts, report.failures], [[], []])
+	assert.equal(server.state.chapters[0].aiModel, 'model-y')
+	assert.equal(note('Stories/Balance/01 Jedna.cs.md').meta.ai_model, 'model-y')
+})
+
+test('sections that could leak private text are refused', async () => {
+	server.state.entry.fields[0].private = true
+	server.state.entry.fields.push({
+		id: 'f3',
+		title: 'Ship',
+		type: 'textarea',
+		private: false,
+		text: 'Nautilus.',
+	})
+	await sync()
+	const path = 'Encyclopedia/Characters/Nemo.md'
+	const original = files.store.get(path)
+	for (const change of [
+		// A `## ` line in private text naming a public section.
+		(body) => body.replace('Born a prince.', 'Born a prince.\n\n## Ship\n\nSecret.'),
+		// A public section marked private here.
+		(body) => body.replace('## Ship', '## Ship (private)'),
+	]) {
+		files.store.set(path, original)
+		edit(path, ({ meta, body }) => ({ meta, body: change(body) }))
+		server.calls.length = 0
+		const report = await sync()
+		assert.equal(report.failures.length, 1, report.failures.join())
+		assert.ok(!server.calls.some(([name]) => name === 'updateEncyclopediaEntry'))
+	}
+})
+
+test('a conflict copy does not overwrite a file of that name', async () => {
+	await sync()
+	const copy = 'Stories/Balance/02 Two (Literary Universe).md'
+	files.store.set(copy, '# My notes')
+	edit('Stories/Balance/02 Two.md', ({ meta }) => ({ meta, body: 'Mine.' }))
+	Object.assign(server.state.chapters[1], {
+		markdown: 'Theirs.',
+		version: 'v2',
+		updatedAt: 't2',
+	})
+	const report = await sync()
+	assert.equal(report.conflicts.length, 1)
+	assert.equal(files.store.get(copy), '# My notes')
+	assert.match(
+		files.store.get('Stories/Balance/02 Two (Literary Universe) 2.md'),
+		/Theirs\./,
+	)
+})
+
+test('a chapter renamed on both sides keeps this title and says so', async () => {
+	await sync()
+	edit('Stories/Balance/02 Two.md', ({ meta, body }) => ({
+		meta: { ...meta, title: 'Dva' },
+		body,
+	}))
+	server.state.chapters[1].title = 'Deux'
+	server.calls.length = 0
+	const report = await sync()
+	assert.equal(report.conflicts.length, 1)
+	assert.ok(!server.calls.some(([name]) => name === 'renameChapter'))
+	server.calls.length = 0
+	await sync()
+	assert.deepEqual(
+		server.calls
+			.filter(([name]) => name === 'renameChapter')
+			.map(([, input]) => input.title),
+		['Dva'],
+	)
+})
