@@ -888,11 +888,14 @@ export class LiteraryUniverseClient {
 		input: AuthorBlogPostMutationInput,
 		options?: RequestOptions,
 	) {
+		// No idempotency key: a retried create or publish could run twice.
 		return this.read<LuMutateBlogPostMutation>(
 			LuMutateBlogPostDocument,
 			'LuMutateBlogPost',
 			{ input },
 			options,
+			undefined,
+			0,
 		)
 	}
 

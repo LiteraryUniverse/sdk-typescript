@@ -541,6 +541,17 @@ test('blog post tools read Markdown per language and map writes to mutateAuthorB
 	)
 	const german = await old.call('get-blog-post', { id: 'post', language: 'de' })
 	assert.equal(german.structuredContent.publishedAt, '2025-05-05T00:00:00Z')
+	legacy.data.isAIGenerated = true
+	legacy.data.aiModel = 'model'
+	legacy.data.i18n.cs.isAIGenerated = false
+	legacy.data.i18n.cs.aiModel = ''
+	const human = await old.call('get-blog-post', { id: 'post', language: 'cs' })
+	assert.equal(human.structuredContent.isAIGenerated, false)
+	assert.equal(human.structuredContent.aiModel, null)
+	assert.equal(german.structuredContent.live, true)
+	legacy.data.hiddenAt = '2026-01-01T00:00:00Z'
+	const held = await old.call('get-blog-post', { id: 'post' })
+	assert.equal(held.structuredContent.live, false)
 	const diary = await old.call('get-blog-post', { id: 'post', format: 'json' })
 	assert.deepEqual(diary.structuredContent.content, { type: 'doc', content: [] })
 	const missing = await call('get-blog-post', { id: 'post', language: 'de' })

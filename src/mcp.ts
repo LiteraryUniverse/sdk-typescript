@@ -1045,6 +1045,8 @@ function postView(
 			'NOT_FOUND',
 			`The post has no ${language} translation`,
 		)
+	// A translation with its own disclosure speaks for itself; otherwise the original's applies.
+	const ai = text && 'isAIGenerated' in text ? text : original
 	// A legacy translation without a date shows whenever the original does.
 	const publishedAt =
 		(language && text && !('publishedAt' in text)
@@ -1064,10 +1066,15 @@ function postView(
 		intro: text?.intro,
 		tags: text?.tags ?? [],
 		publishedAt,
-		// Readers see it now: its date has come, and for a translation the original's too.
-		live: due(publishedAt) && (!language || due(original.publishedAt)),
-		isAIGenerated: text?.isAIGenerated ?? original.isAIGenerated ?? false,
-		aiModel: text?.aiModel ?? original.aiModel ?? null,
+		// Readers see it now: its date has come (for a translation the original's too) and moderation holds nothing.
+		live:
+			due(publishedAt) &&
+			(!language || due(original.publishedAt)) &&
+			!original.hiddenAt &&
+			!original.deletedAt &&
+			!original.blogModerationReportId,
+		isAIGenerated: ai.isAIGenerated ?? false,
+		aiModel: ai.isAIGenerated ? ai.aiModel || null : null,
 		...(format === 'json'
 			? { content: tiptapOf(text?.content as Json | undefined) ?? null }
 			: { markdown: text?.markdown ?? null }),
@@ -1080,7 +1087,10 @@ function postSummary(post: BlogDocument, language?: string): Json {
 	delete summary.markdown
 	return summary
 }
-const blogId = z.string().min(1).describe('From list-blogs')
+const blogId = z
+	.string()
+	.min(1)
+	.describe('From list-blogs; universe and group blogs work by their ID too')
 const tiptapInput = z
 	.record(z.string(), z.unknown())
 	.optional()
@@ -1216,7 +1226,7 @@ const blogsWrite: Record<string, Spec> = {
 	'translate-blog-post': tool({
 		title: 'Translate blog post',
 		description:
-			"Save one language's text of a post at expectedVersion; a new translation needs title and markdown, an existing one changes only the given fields.",
+			"Save one language's text of a post at expectedVersion; a new translation needs a title and starts unpublished, an existing one changes only the given fields and, if published, is live at once. A body with blog widgets fails with CONTENT_UNSUPPORTED or MARKDOWN_UNSUPPORTED.",
 		input: {
 			blogId,
 			postId: id,
