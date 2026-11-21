@@ -244,6 +244,40 @@ export type AuthorBlogMutationInput = {
   entries?: JsonValue | null | undefined;
 };
 
+/**
+ * Title, slug, intro and tags are plain text. Give the body as exactly one of
+ * markdown and content (Tiptap JSON). Omitted fields keep their stored value.
+ */
+export type AuthorBlogPostFields = {
+  title?: string | null | undefined;
+  slug?: string | null | undefined;
+  intro?: string | null | undefined;
+  markdown?: string | null | undefined;
+  content?: JsonValue | null | undefined;
+  tags?: Array<string> | null | undefined;
+  /** The original's language; translations are saved with translate. */
+  language?: string | null | undefined;
+  /** A blog-image upload's file ID; null removes the cover. */
+  coverFileId?: string | number | null | undefined;
+  isAIGenerated?: boolean | null | undefined;
+  aiModel?: string | null | undefined;
+};
+
+/**
+ * action: save (create without postId, or edit), translate (needs language),
+ * publish (publishAt schedules; with language publishes that translation) or
+ * unpublish. expectedVersion is null for a new post, otherwise the version last read.
+ */
+export type AuthorBlogPostMutationInput = {
+  blogId: string | number;
+  postId?: string | number | null | undefined;
+  action: string;
+  expectedVersion?: string | null | undefined;
+  language?: string | null | undefined;
+  post?: AuthorBlogPostFields | null | undefined;
+  publishAt?: string | null | undefined;
+};
+
 export type AuthorComicCreateInput = {
   title: string;
   description: string;
@@ -619,6 +653,34 @@ export type LuMutateBlogMutationVariables = Exact<{
 
 export type LuMutateBlogMutation = { result: { id: string, version: string, data: JsonValue } };
 
+export type LuBlogsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type LuBlogsQuery = { result: Array<{ id: string, type: string, ownerId: string, name: string | null, slug: string | null, language: string | null, canPost: boolean, canManage: boolean }> };
+
+export type LuBlogPostsQueryVariables = Exact<{
+  blogId: string | number;
+  first?: number | null | undefined;
+  after?: string | number | null | undefined;
+}>;
+
+
+export type LuBlogPostsQuery = { result: Array<{ id: string, version: string, data: JsonValue }> };
+
+export type LuBlogPostQueryVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type LuBlogPostQuery = { result: { id: string, version: string, data: JsonValue } };
+
+export type LuMutateBlogPostMutationVariables = Exact<{
+  input: AuthorBlogPostMutationInput;
+}>;
+
+
+export type LuMutateBlogPostMutation = { result: { id: string, version: string, data: JsonValue } };
+
 export type LuComicsQueryVariables = Exact<{
   first?: number | null | undefined;
   after?: string | null | undefined;
@@ -802,6 +864,10 @@ export const LuImagePolicyDocument = "query LuImagePolicy {\n  result: authorIma
 export const LuBlogPagesDocument = "query LuBlogPages($blogId: ID!, $first: Int, $after: ID) {\n  result: authorBlogPages(blogId: $blogId, first: $first, after: $after) {\n    id\n    version\n    data\n  }\n}" as const
 export const LuBlogMenusDocument = "query LuBlogMenus($blogId: ID!) {\n  result: authorBlogMenus(blogId: $blogId) {\n    id\n    version\n    data\n  }\n}" as const
 export const LuMutateBlogDocument = "mutation LuMutateBlog($input: AuthorBlogMutationInput!) {\n  result: mutateAuthorBlog(input: $input) {\n    id\n    version\n    data\n  }\n}" as const
+export const LuBlogsDocument = "query LuBlogs {\n  result: authorBlogs {\n    id\n    type\n    ownerId\n    name\n    slug\n    language\n    canPost\n    canManage\n  }\n}" as const
+export const LuBlogPostsDocument = "query LuBlogPosts($blogId: ID!, $first: Int, $after: ID) {\n  result: authorBlogPosts(blogId: $blogId, first: $first, after: $after) {\n    id\n    version\n    data\n  }\n}" as const
+export const LuBlogPostDocument = "query LuBlogPost($id: ID!) {\n  result: authorBlogPost(id: $id) {\n    id\n    version\n    data\n  }\n}" as const
+export const LuMutateBlogPostDocument = "mutation LuMutateBlogPost($input: AuthorBlogPostMutationInput!) {\n  result: mutateAuthorBlogPost(input: $input) {\n    id\n    version\n    data\n  }\n}" as const
 export const LuComicsDocument = "query LuComics($first: Int, $after: String) {\n  result: authorComics(first: $first, after: $after) {\n    nodes {\n      id\n      title\n      slug\n      description\n      format\n      language\n      license\n      rating\n      genres\n      tags\n      contentWarnings\n      universeId\n      organizationId\n      relatedStoryIds\n      coverUrl\n      isAIGenerated\n      aiModel\n      chaptersCount\n      pageCountTotal\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
 export const LuComicDocument = "query LuComic($id: ID!) {\n  result: authorComic(id: $id) {\n    id\n    title\n    slug\n    description\n    format\n    language\n    license\n    rating\n    genres\n    tags\n    contentWarnings\n    universeId\n    organizationId\n    relatedStoryIds\n    coverUrl\n    isAIGenerated\n    aiModel\n    chaptersCount\n    pageCountTotal\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n  }\n}" as const
 export const LuComicChaptersDocument = "query LuComicChapters($comicId: ID!) {\n  result: authorComicChapters(comicId: $comicId) {\n    id\n    comicId\n    sequence\n    title\n    language\n    parentChapterId\n    pageCount\n    isAIGenerated\n    aiModel\n    publishedAt\n    updatedAt\n  }\n}" as const

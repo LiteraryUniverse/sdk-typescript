@@ -1,5 +1,6 @@
 import {
 	type AuthorBlogMutationInput,
+	type AuthorBlogPostMutationInput,
 	type AuthorChapterCreateInput,
 	type AuthorChapterPublishInput,
 	type AuthorChapterRemoveInput,
@@ -24,6 +25,14 @@ import {
 	LuBlogPagesDocument,
 	type LuBlogPagesQuery,
 	type LuBlogPagesQueryVariables,
+	LuBlogPostDocument,
+	type LuBlogPostQuery,
+	type LuBlogPostQueryVariables,
+	LuBlogPostsDocument,
+	type LuBlogPostsQuery,
+	type LuBlogPostsQueryVariables,
+	LuBlogsDocument,
+	type LuBlogsQuery,
 	LuChaptersDocument,
 	type LuChaptersQuery,
 	type LuChaptersQueryVariables,
@@ -77,6 +86,8 @@ import {
 	type LuImagePolicyQuery,
 	LuMutateBlogDocument,
 	type LuMutateBlogMutation,
+	LuMutateBlogPostDocument,
+	type LuMutateBlogPostMutation,
 	LuProfileDocument,
 	type LuProfileQuery,
 	LuPublishChapterDocument,
@@ -882,6 +893,43 @@ export class LiteraryUniverseClient {
 			'LuMutateBlog',
 			{ input },
 			options,
+		)
+	}
+
+	blogs(options?: RequestOptions) {
+		return this.read<LuBlogsQuery>(LuBlogsDocument, 'LuBlogs', {}, options)
+	}
+
+	blogPosts(input: LuBlogPostsQueryVariables, options?: RequestOptions) {
+		return this.read<LuBlogPostsQuery>(
+			LuBlogPostsDocument,
+			'LuBlogPosts',
+			input,
+			options,
+		)
+	}
+
+	blogPost(input: LuBlogPostQueryVariables, options?: RequestOptions) {
+		return this.read<LuBlogPostQuery>(
+			LuBlogPostDocument,
+			'LuBlogPost',
+			input,
+			options,
+		)
+	}
+
+	mutateBlogPost(
+		input: AuthorBlogPostMutationInput,
+		options?: RequestOptions,
+	) {
+		// No idempotency key: a retried create or publish could run twice.
+		return this.read<LuMutateBlogPostMutation>(
+			LuMutateBlogPostDocument,
+			'LuMutateBlogPost',
+			{ input },
+			options,
+			undefined,
+			0,
 		)
 	}
 
