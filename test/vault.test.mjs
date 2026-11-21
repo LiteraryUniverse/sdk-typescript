@@ -100,7 +100,6 @@ function fakeServer() {
 			c1: {
 				title: 'Jedna',
 				markdown: 'První.',
-				version: 'cv1',
 				updatedAt: 't1',
 			},
 		},
@@ -146,6 +145,8 @@ function fakeServer() {
 			language === 'en' ? chapter.title : state.translations[chapter.id]?.title,
 		language,
 		hasDraft: language === 'en' || Boolean(state.translations[chapter.id]),
+		// One version for every language of a chapter, as on the server.
+		version: chapter.version,
 		updatedAt:
 			language === 'en'
 				? chapter.updatedAt
@@ -178,6 +179,7 @@ function fakeServer() {
 				sequence: chapter.sequence,
 				language,
 				...edition,
+				version: chapter.version,
 			}
 		},
 		saveDraft: async (input) => {
@@ -185,12 +187,14 @@ function fakeServer() {
 			const chapter = state.chapters.find((item) => item.id === input.id)
 			if (chapter.version !== input.expectedVersion)
 				throw Object.assign(new Error('stale'), { code: 'VERSION_CONFLICT' })
-			chapter.markdown = input.markdown
+			const edition =
+				input.language === 'en' ? chapter : state.translations[input.id]
+			edition.markdown = input.markdown
 			chapter.version = `${chapter.version}+`
-			chapter.updatedAt = `${chapter.updatedAt}+`
+			edition.updatedAt = `${edition.updatedAt}+`
 			return {
 				version: chapter.version,
-				draft: { updatedAt: chapter.updatedAt },
+				draft: { updatedAt: edition.updatedAt },
 			}
 		},
 		renameChapter: async (input) => {
@@ -229,7 +233,9 @@ function fakeServer() {
 			page([
 				{
 					...state.entry,
-					editions: [{ language: 'en', version: state.entry.version }],
+					editions: [
+						{ language: 'en', version: state.entry.version, releasedRevision: 1 },
+					],
 				},
 			]),
 		encyclopediaEntry: async () => state.entry,
@@ -464,8 +470,9 @@ test('pushes entry edits, a category move and removed links', async () => {
 	assert.equal(input.expectedVersion, 'ev1')
 	assert.equal(input.changes.categoryTitle, 'Villains')
 	assert.deepEqual(input.changes.relatedRemove, ['Nautilus'])
+	// Only what changed: untouched text keeps its formatting on the server.
+	assert.equal(input.changes.summary, undefined)
 	assert.deepEqual(input.changes.fields, [
-		{ title: 'Biography', text: 'Born a prince.' },
 		{ title: 'Secrets', text: 'He hides.' },
 	])
 	assert.equal(note('Encyclopedia/Villains/Nemo.md').meta.lu_version, 'ev2')
@@ -592,4 +599,86 @@ test('reports offline what the next sync would push', async () => {
 			['Stories/Balance/New.md', 'new'],
 		],
 	)
+})
+
+test('a save in one language does not wedge another edited in the same sync', async () => {
+	await sync()
+	edit('Stories/Balance/01 One.md', ({ meta }) => ({ meta, body: 'Again.' }))
+	edit('Stories/Balance/01 Jedna.cs.md', ({ meta }) => ({
+		meta,
+		body: 'Znovu.',
+	}))
+	await sync()
+	const next = await sync()
+	assert.deepEqual(next.conflicts, [])
+	assert.equal(server.state.chapters[0].markdown, 'Again.')
+	assert.equal(server.state.translations.c1.markdown, 'Znovu.')
+	assert.ok(
+		!files.store.has('Stories/Balance/01 Jedna.cs (Literary Universe).md'),
+	)
+	server.calls.length = 0
+	assert.deepEqual((await sync()).failures, [])
+	assert.deepEqual(server.calls, [])
+})
+
+test('moves a chapter later to the place its sequence names', async () => {
+	server.state.chapters.push({
+		id: 'c3',
+		sequence: 2,
+		title: 'Three',
+		markdown: 'Third.',
+		version: 'v1',
+		updatedAt: 't1',
+	})
+	await sync()
+	edit('Stories/Balance/01 One.md', ({ meta, body }) => ({
+		meta: { ...meta, sequence: 3 },
+		body,
+	}))
+	await sync()
+	assert.deepEqual(server.calls[0][1].chapterIds, ['c2', 'c3', 'c1'])
+	assert.equal(note('Stories/Balance/03 One.md').meta.sequence, 3)
+	server.calls.length = 0
+	await sync()
+	assert.deepEqual(server.calls, [])
+})
+
+test('pushes only changed entry text and keeps a category with punctuation', async () => {
+	server.state.entry.categoryTitle = 'Places: Cities'
+	await sync()
+	const path = 'Encyclopedia/Places Cities/Nemo.md'
+	edit(path, ({ meta, body }) => ({
+		meta,
+		body: body.replace('A captain.', 'A sailor.'),
+	}))
+	const report = await sync()
+	assert.deepEqual(report.failures, [])
+	const [[name, input]] = server.calls
+	assert.equal(name, 'updateEncyclopediaEntry')
+	assert.equal(input.changes.categoryTitle, undefined)
+	assert.equal(input.changes.summary, 'A sailor.')
+	assert.deepEqual(input.changes.fields, [])
+})
+
+test('does not overwrite a note typed into during the sync', async () => {
+	await sync()
+	const path = 'Stories/Balance/02 Two.md'
+	edit(path, ({ meta, body }) => ({ meta, body: `${body} More.` }))
+	const save = server.client.saveDraft
+	server.client.saveDraft = async (input) => {
+		const saved = await save(input)
+		edit(path, ({ meta, body }) => ({ meta, body: `${body} Typing.` }))
+		return saved
+	}
+	const report = await sync()
+	assert.equal(note(path).body, 'Second. More. Typing.')
+	assert.ok(report.failures.some((line) => line.includes('changed during sync')))
+})
+
+test('keeps an existing file where a note would go', async () => {
+	files.store.set('Universe.md', '# My own universe notes')
+	await sync()
+	assert.equal(files.store.get('Universe.md'), '# My own universe notes')
+	assert.equal(note('Universe (u1).md').meta.lu_id, 'u1')
+	assert.deepEqual((await sync()).created, [])
 })

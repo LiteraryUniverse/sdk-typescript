@@ -47,7 +47,7 @@ query LuUniverse($id: ID!) {
 }
 query LuChapters($storyId: ID!, $language: Locale, $first: Int, $after: String) {
   result: authorChapters(storyId: $storyId, language: $language, first: $first, after: $after) {
-    nodes { id storyId sequence title language hasDraft updatedAt publishedAt }
+    nodes { id storyId sequence title language hasDraft version updatedAt publishedAt }
     pageInfo { endCursor hasNextPage }
   }
 }
@@ -104,7 +104,7 @@ mutation LuUpdateUniverse($universeId: ID!, $input: AuthorUniverseUpdateInput!, 
 }
 query LuEncyclopediaEntries($universeId: ID!, $first: Int, $after: String) {
   result: authorEncyclopediaEntries(universeId: $universeId, first: $first, after: $after) {
-    nodes { id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations editions { language version } }
+    nodes { id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations editions { language version releasedRevision } }
     pageInfo { endCursor hasNextPage }
   }
 }

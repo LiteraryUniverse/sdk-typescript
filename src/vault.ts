@@ -271,6 +271,11 @@ class Sync {
 	storyDirs = new Map<string, string>()
 	/** Server titles of each story's chapters in order, for reordering. */
 	chapterOrder = new Map<string, Chapter[]>()
+	/** The text last read or written for each note, to spot typing during the sync. */
+	texts = new Map<string, string>()
+	/** Notes the pull left out for their language; they are not pushed either. */
+	skipped = new Set<string>()
+	storyLanguages = new Map<string, string>()
 
 	constructor(readonly o: Options) {}
 
@@ -337,6 +342,7 @@ class Sync {
 			// Chapter notes from plugin versions before `lu_kind` carry `lu_story`.
 			const kind = str(meta.lu_kind) || (meta.lu_story ? 'chapter' : '')
 			if (!kind) continue
+			this.texts.set(path, text)
 			const note = { path, meta, body }
 			if (!meta.lu_id) this.fresh.push(note)
 			else
@@ -347,11 +353,24 @@ class Sync {
 		}
 	}
 
+	/** Writes the note unless it changed on disk since it was read; typing during a sync wins. */
 	async save(note: Note) {
-		await this.o.files.write(
-			note.path,
-			render(this.o.yaml, note.meta, note.body),
-		)
+		const last = this.texts.get(note.path)
+		if (last !== undefined && (await this.o.files.read(note.path)) !== last) {
+			const line = `${note.path}: changed during sync; sync again`
+			if (!this.report.failures.includes(line)) this.report.failures.push(line)
+			return
+		}
+		const text = render(this.o.yaml, note.meta, note.body)
+		await this.o.files.write(note.path, text)
+		this.texts.set(note.path, text)
+	}
+	async move(note: Note, target: string) {
+		await this.o.files.rename(note.path, target)
+		const text = this.texts.get(note.path)
+		this.texts.delete(note.path)
+		if (text !== undefined) this.texts.set(target, text)
+		note.path = target
 	}
 	/** A path not taken yet; two items can share a title. */
 	async freePath(folder: string, name: string, id: string) {
@@ -363,9 +382,7 @@ class Sync {
 	/** Keeps the note's file name in line with its title, in its own folder. */
 	async rename(note: Note, name: string, id: string) {
 		if (basename(note.path) === name) return
-		const target = await this.freePath(dirname(note.path), name, id)
-		await this.o.files.rename(note.path, target)
-		note.path = target
+		await this.move(note, await this.freePath(dirname(note.path), name, id))
 	}
 
 	/**
@@ -379,6 +396,7 @@ class Sync {
 		edit: (note: Note) => Promise<string>,
 		place: () => Promise<string>,
 	) {
+		server = { ...server, body: server.body.trim() }
 		const note = this.notes.get(key)
 		const serverHash = await edit({
 			path: server.path ?? '',
@@ -400,6 +418,16 @@ class Sync {
 		const local = await edit(note)
 		const edited = local !== note.meta.lu_hash && local !== serverHash
 		if (str(note.meta.lu_version) === server.version && edited) return
+		if (edited && serverHash === note.meta.lu_hash) {
+			// Only the version moved (say, another language was saved): keep the
+			// edit and take the server's sync state, so the push names the new version.
+			const { lu_conflict: _, ...synced } = Object.fromEntries(
+				Object.entries(state).filter(([name]) => name.startsWith('lu_')),
+			)
+			note.meta = { ...note.meta, ...synced }
+			await this.save(note)
+			return
+		}
 		if (!edited) {
 			if (local === serverHash && str(note.meta.lu_version) === server.version)
 				return
@@ -461,6 +489,12 @@ class Sync {
 	])
 	translationHash = this.detailsHash(['title'])
 
+	/** The AI model counts only when set, so notes without one keep their hash. */
+	chapterHash = (note: Note) =>
+		note.meta.ai_model
+			? sha256(`${str(note.meta.ai_model)}\n${note.body}`)
+			: sha256(note.body)
+
 	/** Whether the note changed since its last sync. */
 	async edited(kind: string, note: Note) {
 		if (kind === 'chapter') {
@@ -470,7 +504,7 @@ class Sync {
 				original ? note.meta.sequence : 0,
 			)
 			return (
-				(await sha256(note.body)) !== note.meta.lu_hash ||
+				(await this.chapterHash(note)) !== note.meta.lu_hash ||
 				Boolean(note.meta.lu_meta && meta !== note.meta.lu_meta)
 			)
 		}
@@ -489,7 +523,9 @@ class Sync {
 		const universe = await this.o.client.universe({ id })
 		if (!universe)
 			throw new LiteraryUniverseApiError('NOT_FOUND', 'Universe not found')
-		if (this.wanted(universe.language))
+		if (!this.wanted(universe.language))
+			this.skipped.add(this.key('universe', id))
+		else
 			await this.merge(
 				this.key('universe', id),
 				'Universe',
@@ -499,7 +535,7 @@ class Sync {
 					version: universe.version,
 				},
 				this.universeHash,
-				async () => 'Universe.md',
+				() => this.freePath('', 'Universe', id),
 			)
 		for (const translation of universe.translations)
 			if (this.wanted(translation.language))
@@ -517,7 +553,7 @@ class Sync {
 						version: String(translation.revision),
 					},
 					this.translationHash,
-					async () => `Universe.${translation.language}.md`,
+					() => this.freePath('', `Universe.${translation.language}`, id),
 				)
 	}
 
@@ -527,8 +563,23 @@ class Sync {
 			throw new LiteraryUniverseApiError('NOT_FOUND', 'Story not found')
 		const key = this.key('story', id)
 		const existing = this.notes.get(key)
-		const dir = existing ? dirname(existing.path) : folder
+		// Two stories can share a title; each gets its own folder.
+		const taken =
+			folder &&
+			([...this.storyDirs.values()].includes(folder) ||
+				[...this.notes.values()].some(
+					(note) =>
+						note.meta.lu_kind === 'story' &&
+						note.meta.lu_id !== id &&
+						dirname(note.path) === folder,
+				))
+		const dir = existing
+			? dirname(existing.path)
+			: taken
+				? `${folder} (${id.slice(0, 6)})`
+				: folder
 		this.storyDirs.set(id, dir)
+		this.storyLanguages.set(id, story.language)
 		await this.merge(
 			key,
 			story.title,
@@ -547,10 +598,13 @@ class Sync {
 				version: story.version,
 			},
 			this.storyHash,
-			async () => join(dir, 'Story.md'),
+			() => this.freePath(dir, 'Story', id),
 		)
 		for (const language of [story.language, ...story.translations])
-			if (this.wanted(language)) await this.pullChapters(story, language, dir)
+			if (this.wanted(language))
+				await this.attempt(`${story.title} (${language})`, () =>
+					this.pullChapters(story, language, dir),
+				)
 	}
 
 	chapterMetaHash = (title: unknown, sequence: unknown) =>
@@ -610,7 +664,9 @@ class Sync {
 		const fresh =
 			!note ||
 			!note.meta.lu_updated ||
-			note.meta.lu_updated !== chapter.updatedAt
+			note.meta.lu_updated !== chapter.updatedAt ||
+			// One version for every language: a save in another one moves it.
+			str(note.meta.lu_version) !== chapter.version
 		if (!fresh) return
 		const draft = await this.o.client.draft({ id: chapter.id, language })
 		await this.merge(
@@ -632,7 +688,7 @@ class Sync {
 				body: draft.markdown ?? '',
 				version: draft.version,
 			},
-			async (n) => sha256(n.body),
+			this.chapterHash,
 			async () => this.freePath(dir, name, chapter.id),
 		)
 		// A header seen as is needs no fetch next time, even when the note was kept.
@@ -694,15 +750,41 @@ class Sync {
 		)
 		for (const header of headers)
 			for (const edition of header.editions) {
-				if (!this.wanted(edition.language)) continue
 				const original = edition.language === header.language
 				const key = this.key(
 					'entry',
 					header.id,
 					original ? '' : edition.language,
 				)
+				if (!this.wanted(edition.language)) {
+					this.skipped.add(key)
+					continue
+				}
 				const note = this.notes.get(key)
-				if (note && str(note.meta.lu_version) === edition.version) continue
+				if (note && str(note.meta.lu_version) === edition.version) {
+					// A release leaves the draft alone; refresh only `lu_released`.
+					const revisions = Object.values(
+						(note.meta.lu_released ?? {}) as Meta,
+					)
+						.map((value) => Number.parseInt(str(value), 10))
+						.filter(Number.isFinite)
+					const newest = revisions.length ? Math.max(...revisions) : null
+					if ((edition.releasedRevision ?? null) !== newest)
+						await this.attempt(`Encyclopedia / ${header.name}`, async () => {
+							const entry = await this.o.client.encyclopediaEntry({
+								id: header.id,
+								language: original ? undefined : edition.language,
+							})
+							if (!entry) return
+							note.meta.lu_released = this.entryNote(
+								entry,
+								original,
+							).meta.lu_released
+							await this.save(note)
+							this.report.updated.push(note.path)
+						})
+					continue
+				}
 				await this.attempt(`Encyclopedia / ${header.name}`, async () => {
 					const entry = await this.o.client.encyclopediaEntry({
 						id: header.id,
@@ -756,13 +838,10 @@ class Sync {
 						!merged.meta.lu_conflict &&
 						dirname(merged.path) !== folder
 					) {
-						const target = await this.freePath(
-							folder,
-							basename(merged.path),
-							entry.id,
+						await this.move(
+							merged,
+							await this.freePath(folder, basename(merged.path), entry.id),
 						)
-						await this.o.files.rename(merged.path, target)
-						merged.path = target
 					}
 				})
 			}
@@ -792,7 +871,8 @@ class Sync {
 			)
 			.join('\n\n')
 		await this.readOnly(
-			'Series.md',
+			this.notes.get(this.key('series', universeId))?.path ??
+				(await this.freePath('', 'Series', universeId)),
 			{ lu_kind: 'series', lu_id: universeId },
 			body,
 		)
@@ -848,10 +928,21 @@ class Sync {
 
 	// --- Push ---
 
+	/** Push only what the pull covers: the wanted languages and, in story scope, that story. */
+	inScope(kind: string, note: Note, key: string) {
+		const language = str(note.meta.lu_language)
+		if (language ? !this.wanted(language) : this.skipped.has(key)) return false
+		const { scope } = this.o
+		if (scope.kind !== 'story') return true
+		if (kind === 'chapter') return str(note.meta.lu_story) === scope.storyId
+		return kind !== 'story' || str(note.meta.lu_id) === scope.storyId
+	}
+
 	async push() {
-		for (const note of [...this.notes.values()]) {
+		for (const [key, note] of [...this.notes]) {
 			const kind = str(note.meta.lu_kind) || 'chapter'
 			if (['series', 'comic'].includes(kind)) continue
+			if (!this.inScope(kind, note, key)) continue
 			if (note.meta.lu_conflict) {
 				if (await this.o.files.exists(str(note.meta.lu_conflict))) {
 					if (!this.report.conflicts.some((line) => line.endsWith(note.path)))
@@ -882,19 +973,22 @@ class Sync {
 				const header = this.chapterOrder
 					.get(str(note.meta.lu_story))
 					?.find((chapter) => chapter.id === id)
-				if (!header || header.title !== title || !original)
+				if (!header || header.title !== title || !original) {
 					await client.renameChapter({
 						id,
 						title,
 						language: original ? undefined : str(note.meta.lu_language),
 					})
+					// pushOrder records the title in `lu_meta` only once the server has it.
+					if (header) header.title = title
+				}
 				if (!original) {
 					note.meta.lu_meta = metaHash
 					await this.save(note)
 				}
 				// The original's new sequence is saved after the reorder.
 			}
-			const hash = await sha256(note.body)
+			const hash = await this.chapterHash(note)
 			if (hash === note.meta.lu_hash) return
 			const expectedVersion = str(note.meta.lu_version)
 			const language = str(note.meta.lu_language)
@@ -923,7 +1017,7 @@ class Sync {
 					: kind === 'universe'
 						? this.universeHash
 						: this.translationHash
-		const hash = await hasher(note)
+		let hash = await hasher(note)
 		if (hash === note.meta.lu_hash) return
 		const expectedVersion = str(note.meta.lu_version) || undefined
 		if (kind === 'story') {
@@ -966,9 +1060,12 @@ class Sync {
 			})
 			note.meta.lu_version = String(saved.revision)
 		} else if (kind === 'entry') {
-			note.meta.lu_version = (
-				await this.pushEntry(note, id, expectedVersion, aiModel)
-			).version
+			// The note shows what the server kept, such as a section deleted here.
+			const entry = await this.pushEntry(note, id, expectedVersion, aiModel)
+			const pulled = this.entryNote(entry, !note.meta.lu_language)
+			note.meta = { ...note.meta, ...pulled.meta, lu_version: entry.version }
+			note.body = pulled.body
+			hash = await this.entryHash(note)
 		}
 		note.meta.lu_hash = hash
 		await this.save(note)
@@ -984,6 +1081,23 @@ class Sync {
 		const { client } = this.o
 		const parsed = parseEntryBody(note.body)
 		const language = str(note.meta.lu_language)
+		const current = await client.encyclopediaEntry({
+			id,
+			language: language || undefined,
+		})
+		// Only text that changed: the server rebuilds rich text from what it gets.
+		const summary =
+			parsed.summary !== (current?.summary ?? '').trim()
+				? parsed.summary
+				: undefined
+		const fields = parsed.fields.filter(
+			(field) =>
+				field.text !==
+				(
+					current?.fields.find((item) => item.title === field.title)?.text ??
+					''
+				).trim(),
+		)
 		if (language) {
 			const titles = (note.meta.lu_fields ?? {}) as Record<string, string>
 			return client.translateEncyclopediaEntry({
@@ -992,8 +1106,8 @@ class Sync {
 				expectedVersion,
 				name: str(note.meta.name) || undefined,
 				pronunciation: str(note.meta.pronunciation),
-				summary: parsed.summary,
-				fields: parsed.fields.map((field) => ({
+				summary,
+				fields: fields.map((field) => ({
 					title: titles[field.title] ?? field.title,
 					translatedTitle: field.title,
 					text: field.text,
@@ -1002,7 +1116,12 @@ class Sync {
 		}
 		const parent = unlink(note.meta.parent)
 		const related = list(note.meta.related).map(unlink)
-		const current = await client.encyclopediaEntry({ id })
+		// The folder is the category as a file name; send it only when the note moved.
+		const folder = basename(dirname(note.path))
+		const category = safeName(
+			current?.categoryTitle ?? 'Uncategorized',
+			'Uncategorized',
+		)
 		return client.updateEncyclopediaEntry({
 			id,
 			expectedVersion,
@@ -1013,11 +1132,11 @@ class Sync {
 				name: str(note.meta.name) || basename(note.path),
 				pronunciation: str(note.meta.pronunciation),
 				tags: list(note.meta.tags),
-				categoryTitle: basename(dirname(note.path)),
+				categoryTitle: folder !== category ? folder : undefined,
 				parentName: parent || null,
 				relatedAdd: related,
-				summary: parsed.summary,
-				fields: parsed.fields,
+				summary,
+				fields,
 				aiModel,
 			},
 		})
@@ -1025,61 +1144,73 @@ class Sync {
 
 	/** Chapters whose `sequence` changed locally go where it says; the rest keep their order. */
 	async pushOrder() {
-		for (const [storyId, chapters] of this.chapterOrder) {
-			const notes = chapters.map((chapter) =>
-				this.notes.get(this.key('chapter', chapter.id, chapter.language)),
+		for (const [storyId, chapters] of this.chapterOrder)
+			await this.attempt(
+				`Chapter order of ${this.storyDirs.get(storyId) || storyId}`,
+				() => this.pushStoryOrder(storyId, chapters),
 			)
-			const moved = await Promise.all(
-				notes.map(async (note) =>
-					note?.meta.lu_meta
-						? (await this.chapterMetaHash(
-								note.meta.title,
-								note.meta.sequence,
-							)) !== note.meta.lu_meta
-						: false,
-				),
+	}
+
+	async pushStoryOrder(storyId: string, chapters: Chapter[]) {
+		const notes = chapters.map((chapter) =>
+			this.notes.get(this.key('chapter', chapter.id, chapter.language)),
+		)
+		// A note waiting on its conflict copy neither moves nor is moved.
+		const held = (note?: Note) => Boolean(note?.meta.lu_conflict)
+		const moved = await Promise.all(
+			notes.map(async (note) =>
+				note?.meta.lu_meta && !held(note)
+					? (await this.chapterMetaHash(
+							note.meta.title,
+							note.meta.sequence,
+						)) !== note.meta.lu_meta
+					: false,
+			),
+		)
+		const changed = chapters.some(
+			(chapter, index) =>
+				moved[index] &&
+				Number(notes[index]?.meta.sequence) !== chapter.sequence + 1,
+		)
+		if (changed) {
+			// The rest keep their order; a moved one goes before the chapter now at its place.
+			let rank = 0
+			const order = chapters
+				.map((chapter, index) => ({
+					id: chapter.id,
+					at: moved[index]
+						? Number(notes[index]?.meta.sequence) - 1.5
+						: rank++,
+				}))
+				.sort((a, b) => a.at - b.at)
+				.map((item) => item.id)
+			await this.o.client.reorderChapters({ storyId, chapterIds: order })
+			this.report.pushed.push(
+				`Chapter order of ${this.storyDirs.get(storyId) || storyId}`,
 			)
-			const changed = chapters.some(
-				(chapter, index) =>
-					moved[index] &&
-					Number(notes[index]?.meta.sequence) !== chapter.sequence + 1,
+			order.forEach((id, index) => {
+				const note = this.notes.get(
+					this.key('chapter', id, chapters[0].language),
+				)
+				if (note && !held(note)) note.meta.sequence = index + 1
+			})
+		}
+		for (const [index, note] of notes.entries()) {
+			// A title the server doesn't have yet (its rename failed) stays pending.
+			if (!note || held(note) || chapters[index].title !== str(note.meta.title))
+				continue
+			const hash = await this.chapterMetaHash(
+				note.meta.title,
+				note.meta.sequence,
 			)
-			if (changed) {
-				const order = chapters
-					.map((chapter, index) => ({
-						id: chapter.id,
-						at: moved[index]
-							? Number(notes[index]?.meta.sequence) - 1.5
-							: index,
-					}))
-					.sort((a, b) => a.at - b.at)
-					.map((item) => item.id)
-				await this.o.client.reorderChapters({ storyId, chapterIds: order })
-				this.report.pushed.push(
-					`Chapter order of ${this.storyDirs.get(storyId) || storyId}`,
-				)
-				order.forEach((id, index) => {
-					const note = this.notes.get(
-						this.key('chapter', id, chapters[0].language),
-					)
-					if (note) note.meta.sequence = index + 1
-				})
-			}
-			for (const note of notes) {
-				if (!note) continue
-				const hash = await this.chapterMetaHash(
-					note.meta.title,
-					note.meta.sequence,
-				)
-				if (hash === note.meta.lu_meta) continue
-				note.meta.lu_meta = hash
-				await this.save(note)
-				await this.rename(
-					note,
-					chapterFileName(Number(note.meta.sequence), str(note.meta.title)),
-					str(note.meta.lu_id),
-				)
-			}
+			if (hash === note.meta.lu_meta) continue
+			note.meta.lu_meta = hash
+			await this.save(note)
+			await this.rename(
+				note,
+				chapterFileName(Number(note.meta.sequence), str(note.meta.title)),
+				str(note.meta.lu_id),
+			)
 		}
 	}
 
@@ -1098,6 +1229,9 @@ class Sync {
 					'BAD_USER_INPUT',
 					'A new chapter belongs in a story folder, next to its Story.md',
 				)
+			const language =
+				str(note.meta.lu_language) || this.storyLanguages.get(storyId) || ''
+			if (!this.wanted(language)) return
 			const title =
 				str(note.meta.title) || basename(note.path).replace(/^\d+\s+/, '')
 			const created = await client.createChapter({
@@ -1117,7 +1251,7 @@ class Sync {
 				lu_story: storyId,
 				lu_language: created.language,
 				lu_version: created.version,
-				lu_hash: await sha256(note.body),
+				lu_hash: await this.chapterHash(note),
 				lu_updated: draft.updatedAt,
 				title: created.title,
 				sequence: created.sequence + 1,
@@ -1136,6 +1270,9 @@ class Sync {
 			return
 		}
 		if (kind === 'entry' && this.o.scope.kind === 'universe') {
+			// A new entry is written in the universe's language.
+			if (this.skipped.has(this.key('universe', this.o.scope.universeId)))
+				return
 			const parsed = parseEntryBody(note.body)
 			const name = str(note.meta.name) || basename(note.path)
 			const parent = unlink(note.meta.parent)

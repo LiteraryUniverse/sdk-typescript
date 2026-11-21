@@ -453,6 +453,11 @@ type AuthorChapterHeader {
   title: String!
   language: Locale!
   hasDraft: Boolean!
+
+  """
+  The draft version a save names. One for every language of the chapter: a save in any language changes it.
+  """
+  version: String!
   updatedAt: DateTime
   publishedAt: DateTime
 }
@@ -675,6 +680,11 @@ type AuthorEncyclopediaEdition {
 
   """Changes with every save of this edition; pass it as expectedVersion."""
   version: String!
+
+  """
+  The newest release of this edition to any audience; a new release raises it.
+  """
+  releasedRevision: Int
 }
 
 """The newest release of one edition to one audience."""
