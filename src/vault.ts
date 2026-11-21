@@ -177,6 +177,36 @@ export function parseEntryBody(body: string) {
 	}
 }
 const TEXT_FIELDS = ['text', 'textarea']
+/** Titles of the sections a body marks `(private)`. */
+const privateTitles = (body: string) =>
+	new Set(
+		[...body.matchAll(/^## (.*?)\s*\(private\)\s*$/gm)].map((match) =>
+			match[1].trim(),
+		),
+	)
+/**
+ * The API makes every new section public: a new one marked private, or one
+ * right after a private section (a `## ` line in private text), is refused.
+ */
+function refuseNewPrivate(
+	body: string,
+	fields: { title: string }[],
+	known: Set<string>,
+) {
+	const hidden = privateTitles(body)
+	if (
+		fields.some(
+			(field, index) =>
+				!known.has(field.title) &&
+				(hidden.has(field.title) ||
+					(index > 0 && hidden.has(fields[index - 1].title))),
+		)
+	)
+		throw new LiteraryUniverseApiError(
+			'BAD_USER_INPUT',
+			'New sections are public on Literary Universe: add a private section on the site, and keep lines starting with "## " out of private text',
+		)
+}
 
 // --- Engine --------------------------------------------------------------
 
@@ -275,6 +305,8 @@ class Sync {
 	texts = new Map<string, string>()
 	/** Notes the pull left out for their language; they are not pushed either. */
 	skipped = new Set<string>()
+	/** Notes typed into while a write was due; they sit out the rest of this sync. */
+	deferred = new Set<Note>()
 	/** Stories and entries the universe's pull listed; only they push. */
 	listed = new Set<string>()
 	storyLanguages = new Map<string, string>()
@@ -365,6 +397,7 @@ class Sync {
 	 * typing against the server's text as a conflict.
 	 */
 	async save(note: Note) {
+		if (this.deferred.has(note)) return false
 		const last = this.texts.get(note.path)
 		const current =
 			last === undefined ? undefined : await this.o.files.read(note.path)
@@ -376,23 +409,37 @@ class Sync {
 				render(this.o.yaml, note.meta, note.body),
 				this.o.yaml,
 			)
-			if (wanted.body !== read.body) {
+			const same = (a: unknown, b: unknown) =>
+				JSON.stringify(a) === JSON.stringify(b)
+			const skip = () => {
+				// The note in memory goes back to the file as last read, typing aside.
+				note.meta = read.meta
+				note.body = read.body
+				this.deferred.add(note)
 				this.report.failures.push(
 					`${note.path}: changed during sync; sync again`,
 				)
 				return false
 			}
+			if (wanted.body !== read.body) return skip()
 			const meta = { ...typed.meta }
 			for (const name of new Set([
 				...Object.keys(wanted.meta),
 				...Object.keys(read.meta),
-			]))
+			])) {
+				if (same(wanted.meta[name], read.meta[name])) continue
+				// Both sides changed this key: a new note keeps what was typed,
+				// a synced one waits for the next sync to weigh them.
 				if (
-					JSON.stringify(wanted.meta[name]) !== JSON.stringify(read.meta[name])
+					!same(typed.meta[name], read.meta[name]) &&
+					!same(typed.meta[name], wanted.meta[name])
 				) {
-					if (wanted.meta[name] === undefined) delete meta[name]
-					else meta[name] = wanted.meta[name]
+					if (read.meta.lu_id) return skip()
+					continue
 				}
+				if (wanted.meta[name] === undefined) delete meta[name]
+				else meta[name] = wanted.meta[name]
+			}
 			note.meta = meta
 			note.body = typed.body
 		}
@@ -410,10 +457,14 @@ class Sync {
 	}
 	/** A path not taken yet; two items can share a title. */
 	async freePath(folder: string, name: string, id: string) {
-		const path = join(folder, `${name}.md`)
-		return (await this.o.files.exists(path))
-			? join(folder, `${name} (${id.slice(0, 6)}).md`)
-			: path
+		for (const suffix of ['', ` (${id.slice(0, 6)})`, ` (${id})`]) {
+			const path = join(folder, `${name}${suffix}.md`)
+			if (!(await this.o.files.exists(path))) return path
+		}
+		for (let count = 2; ; count++) {
+			const path = join(folder, `${name} (${id}) ${count}.md`)
+			if (!(await this.o.files.exists(path))) return path
+		}
 	}
 	/** Keeps the note's file name in line with its title, in its own folder. */
 	async rename(note: Note, name: string, id: string) {
@@ -458,7 +509,8 @@ class Sync {
 		if (edited && serverHash === note.meta.lu_hash) {
 			// Only the version moved (say, another language was saved): keep the
 			// edit and take the server's sync state, so the push names the new version.
-			const { lu_conflict: _, ...synced } = Object.fromEntries(
+			// The folder stays where the author has it, so its category does too.
+			const { lu_conflict: _, lu_category: __, ...synced } = Object.fromEntries(
 				Object.entries(state).filter(([name]) => name.startsWith('lu_')),
 			)
 			note.meta = { ...note.meta, ...synced }
@@ -721,6 +773,17 @@ class Sync {
 						chapterFileName(sequence, str(note.meta.title)),
 						chapter.id,
 					)
+			} else if (
+				original &&
+				serverMeta !== base &&
+				str(note.meta.title) !== chapter.title &&
+				(await this.chapterMetaHash(note.meta.title, sequence)) === base
+			) {
+				// Reordered here, renamed there: take the title, keep the new order
+				// (the reorder push records it and renames the file).
+				note.meta.title = chapter.title
+				note.meta.lu_meta = serverMeta
+				await this.save(note)
 			}
 		}
 		const fresh =
@@ -733,6 +796,14 @@ class Sync {
 			str(note.meta.lu_version) !== chapter.version
 		if (!fresh) return
 		const draft = await this.o.client.draft({ id: chapter.id, language })
+		// Plugin 0.2.1 hashed the body alone; with the server on the same model,
+		// such a note is as synced.
+		if (
+			note?.meta.ai_model &&
+			str(note.meta.ai_model) === str(draft.aiModel) &&
+			note.meta.lu_hash === (await sha256(note.body))
+		)
+			note.meta.lu_hash = await this.chapterHash(note)
 		await this.merge(
 			key,
 			`${story.title} / ${chapter.title}`,
@@ -784,6 +855,10 @@ class Sync {
 				lu_kind: 'entry',
 				lu_id: entry.id,
 				lu_language: original ? undefined : entry.language,
+				// The category the note's folder stands for; a move here changes the folder.
+				lu_category: original
+					? (entry.categoryTitle ?? 'Uncategorized')
+					: undefined,
 				lu_released: Object.fromEntries(
 					entry.released
 						.filter((release) => release.language === entry.language)
@@ -1012,7 +1087,7 @@ class Sync {
 		for (const [key, note] of [...this.notes]) {
 			const kind = str(note.meta.lu_kind) || 'chapter'
 			if (['series', 'comic'].includes(kind)) continue
-			if (!this.inScope(kind, note, key)) continue
+			if (!this.inScope(kind, note, key) || this.deferred.has(note)) continue
 			if (note.meta.lu_conflict) {
 				if (await this.o.files.exists(str(note.meta.lu_conflict))) {
 					if (!this.report.conflicts.some((line) => line.endsWith(note.path)))
@@ -1082,14 +1157,18 @@ class Sync {
 				if (
 					other !== note &&
 					key.startsWith(`chapter:${id}:`) &&
-					str(other.meta.lu_version) === expectedVersion
+					str(other.meta.lu_version) === expectedVersion &&
+					this.inScope('chapter', other, key)
 				) {
-					// The disclosure covers the whole chapter: the other languages take it.
-					if (aiModel && str(other.meta.ai_model) !== aiModel) {
-						const unedited =
-							(await this.chapterHash(other)) === other.meta.lu_hash
+					// The disclosure covers the whole chapter: an unedited language
+					// takes it; an edited one pushes its own next.
+					if (
+						aiModel &&
+						str(other.meta.ai_model) !== aiModel &&
+						(await this.chapterHash(other)) === other.meta.lu_hash
+					) {
 						other.meta.ai_model = aiModel
-						if (unedited) other.meta.lu_hash = await this.chapterHash(other)
+						other.meta.lu_hash = await this.chapterHash(other)
 					}
 					other.meta.lu_version = saved.version
 					await this.save(other)
@@ -1167,7 +1246,15 @@ class Sync {
 			// The note shows what the server kept, such as a section deleted here.
 			const entry = await this.pushEntry(note, id, expectedVersion, aiModel)
 			const pulled = this.entryNote(entry, !note.meta.lu_language)
-			const sent = note.body
+			const sent = { meta: note.meta, body: note.body }
+			// A category renamed on the site leaves the folder as it is, and with it
+			// the category it stands for.
+			if (
+				note.meta.lu_category !== undefined &&
+				safeName(str(pulled.meta.lu_category), 'Uncategorized') !==
+					basename(dirname(note.path))
+			)
+				pulled.meta.lu_category = note.meta.lu_category
 			note.meta = { ...note.meta, ...pulled.meta, lu_version: entry.version }
 			note.body = pulled.body
 			note.meta.lu_hash = await this.entryHash(note)
@@ -1184,11 +1271,22 @@ class Sync {
 	 * Saves an entry note rewritten from the server's answer. One typed into
 	 * meanwhile keeps its text, recorded as sent, so the typing pushes next.
 	 */
-	async record(note: Note, sent: string) {
+	async record(note: Note, sent: { meta: Meta; body: string }) {
+		const state = Object.fromEntries(
+			Object.entries(note.meta).filter(([name]) => name.startsWith('lu_')),
+		)
 		const failures = this.report.failures.length
 		if (await this.save(note)) return
 		this.report.failures.length = failures
-		note.body = sent
+		this.deferred.delete(note)
+		// The text and frontmatter as sent, with the new sync state.
+		note.meta = {
+			...Object.fromEntries(
+				Object.entries(sent.meta).filter(([name]) => !name.startsWith('lu_')),
+			),
+			...state,
+		}
+		note.body = sent.body
 		note.meta.lu_hash = await this.entryHash(note)
 		await this.save(note)
 	}
@@ -1260,12 +1358,19 @@ class Sync {
 				})),
 			})
 		}
+		if (!same)
+			refuseNewPrivate(
+				note.body,
+				parsed.fields,
+				new Set(current?.fields.map((field) => field.title)),
+			)
 		const parent = unlink(note.meta.parent)
 		const related = list(note.meta.related).map(unlink)
 		// The folder is the category as a file name; send it only when the note moved.
 		const folder = basename(dirname(note.path))
+		// Against the category last synced: one renamed on the site is no move.
 		const category = safeName(
-			current?.categoryTitle ?? 'Uncategorized',
+			str(note.meta.lu_category) || current?.categoryTitle || 'Uncategorized',
 			'Uncategorized',
 		)
 		return client.updateEncyclopediaEntry({
@@ -1433,6 +1538,7 @@ class Sync {
 			if (this.skipped.has(this.key('universe', this.o.scope.universeId)))
 				return
 			const parsed = parseEntryBody(note.body)
+			refuseNewPrivate(note.body, parsed.fields, new Set())
 			const name = str(note.meta.name) || basename(note.path)
 			const parent = unlink(note.meta.parent)
 			const entry = await client.createEncyclopediaEntry({
@@ -1448,7 +1554,7 @@ class Sync {
 				aiModel,
 			})
 			const pulled = this.entryNote(entry, true)
-			const sent = note.body
+			const sent = { meta: note.meta, body: note.body }
 			note.meta = { ...pulled.meta, lu_version: entry.version }
 			note.body = pulled.body
 			note.meta.lu_hash = await this.entryHash(note)

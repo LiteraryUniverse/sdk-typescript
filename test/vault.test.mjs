@@ -464,7 +464,7 @@ test('pushes entry edits, a category move and removed links', async () => {
 	await sync()
 	edit('Encyclopedia/Characters/Nemo.md', ({ meta, body }) => ({
 		meta: { ...meta, related: [] },
-		body: `${body}\n\n## Secrets (private)\n\nHe hides.`,
+		body: `${body}\n\n## Secrets\n\nHe hides.`,
 	}))
 	files.store.set(
 		'Encyclopedia/Villains/Nemo.md',
@@ -938,4 +938,75 @@ test('an entry whose section text has a "## " line is left to the site', async (
 	assert.equal(report.failures.length, 1)
 	assert.match(report.failures[0], /edit the entry on Literary Universe/)
 	assert.ok(!server.calls.some(([name]) => name === 'updateEncyclopediaEntry'))
+})
+
+test('a new private section is refused, as the API would make it public', async () => {
+	await sync()
+	edit('Encyclopedia/Characters/Nemo.md', ({ meta, body }) => ({
+		meta,
+		body: `${body}\n\n## Secrets (private)\n\nHe hides.`,
+	}))
+	server.calls.length = 0
+	const report = await sync()
+	assert.match(report.failures[0], /New sections are public/)
+	assert.ok(!server.calls.some(([name]) => name === 'updateEncyclopediaEntry'))
+})
+
+test('a fallback path already taken is not overwritten', async () => {
+	files.store.set('Encyclopedia/Characters/Nemo.md', '# Mine')
+	files.store.set('Encyclopedia/Characters/Nemo (e1).md', '# Mine too')
+	await sync()
+	assert.equal(files.store.get('Encyclopedia/Characters/Nemo.md'), '# Mine')
+	assert.equal(
+		files.store.get('Encyclopedia/Characters/Nemo (e1).md'),
+		'# Mine too',
+	)
+})
+
+test('a reorder here keeps a rename made on the site', async () => {
+	await sync()
+	edit('Stories/Balance/02 Two.md', ({ meta, body }) => ({
+		meta: { ...meta, sequence: 1 },
+		body,
+	}))
+	server.state.chapters[1].title = 'Deux'
+	await sync()
+	assert.ok(!server.calls.some(([name]) => name === 'renameChapter'))
+	assert.deepEqual(
+		server.calls.find(([name]) => name === 'reorderChapters')[1].chapterIds,
+		['c2', 'c1'],
+	)
+	assert.equal(note('Stories/Balance/01 Deux.md').meta.title, 'Deux')
+})
+
+test('a category renamed on the site is no move', async () => {
+	await sync()
+	server.state.entry.categoryTitle = 'People'
+	edit('Encyclopedia/Characters/Nemo.md', ({ meta, body }) => ({
+		meta,
+		body: body.replace('A captain.', 'The captain.'),
+	}))
+	server.calls.length = 0
+	await sync()
+	const [, input] = server.calls.find(
+		([name]) => name === 'updateEncyclopediaEntry',
+	)
+	assert.equal(input.changes.categoryTitle, undefined)
+})
+
+test('a title typed during a sync that brings one from the site waits', async () => {
+	await sync()
+	const path = 'Stories/Balance/02 Two.md'
+	server.state.chapters[1].title = 'Deux'
+	const chapters = server.client.chapters
+	server.client.chapters = async (input) => {
+		const page = await chapters(input)
+		edit(path, ({ meta, body }) => ({ meta: { ...meta, title: 'Dva' }, body }))
+		return page
+	}
+	const report = await sync()
+	server.client.chapters = chapters
+	assert.deepEqual(report.failures, [`${path}: changed during sync; sync again`])
+	assert.equal(note(path).meta.title, 'Dva')
+	assert.ok(!server.calls.some(([name]) => name === 'renameChapter'))
 })
