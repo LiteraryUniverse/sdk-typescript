@@ -615,7 +615,9 @@ A create whose slug the blog already uses fails with `CONFLICT` naming that
 post, so a retried create never posts twice. A stale version fails with
 `VERSION_CONFLICT`. Markdown edits of a body that holds blog widgets or other
 content Markdown cannot carry, or that is stored as HTML only, fail with
-`MARKDOWN_UNSUPPORTED`. Organization
+`MARKDOWN_UNSUPPORTED`, and a `content` document with types the API does not
+know (blog widgets) fails with `CONTENT_UNSUPPORTED`. Slugs follow the web
+editor: up to 100 lowercase letters, digits, `-` and `_`. Organization
 keys can read their own organization blog's posts but not write them: a post
 is signed by a person. Fan-club tiers, podcasts and literary
 commentary stay in the web editor.

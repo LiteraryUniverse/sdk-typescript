@@ -614,7 +614,6 @@ test('publish-blog-post without confirm echoes the request and sends nothing', a
 	const held = await call('unpublish-blog-post', { ...input, confirm: true })
 	assert.equal(sent[1].variables.input.action, 'unpublish')
 	assert.equal(held.structuredContent.unpublished, true)
-	// A publish the server refused to date (a publication-restricted account) is not reported as live.
-	const refused = await call('publish-blog-post', { ...input, confirm: true })
-	assert.equal(refused.structuredContent.published, false)
+	// The Czech date has passed, but its original is still a draft: not live.
+	assert.equal(live.structuredContent.live, false)
 })

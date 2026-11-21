@@ -333,7 +333,7 @@ const publish: Record<string, Spec> = {
 	'publish-blog-post': tool({
 		title: 'Publish blog post',
 		description:
-			'Publish a post or one translation now or at publishAt; a live post keeps its date. Without confirm: true nothing happens and the request is echoed back; ask the author first.',
+			'Publish a post or one translation now or at publishAt; a live post keeps its date. live in the result says whether readers see it now: a scheduled post, or a translation of an unpublished original, is not live yet. Without confirm: true nothing happens and the request is echoed back; ask the author first.',
 		input: {
 			blogId: z.string().min(1),
 			postId: id,
@@ -352,9 +352,7 @@ const publish: Record<string, Spec> = {
 		run: async (client, { confirm, ...input }) => {
 			if (!confirm) return { published: false, wouldPublish: input }
 			const post = await client.mutateBlogPost({ ...input, action: 'publish' })
-			const result = postSummary(post, input.language)
-			// The server keeps a post unpublished for an account barred from publishing.
-			return { published: Boolean(result.publishedAt), ...result }
+			return { published: true, ...postSummary(post, input.language) }
 		},
 		text: (result) =>
 			result.published
@@ -379,8 +377,7 @@ const publish: Record<string, Spec> = {
 				...input,
 				action: 'unpublish',
 			})
-			const result = postSummary(post, input.language)
-			return { unpublished: !result.publishedAt, ...result }
+			return { unpublished: true, ...postSummary(post, input.language) }
 		},
 		text: (result) =>
 			result.unpublished
@@ -1038,12 +1035,21 @@ function postView(
 ) {
 	const data = post.data as PostFields
 	const { i18n, content, markdown, ...original } = data
-	const text = language ? i18n?.[language] : data
+	const text = language
+		? i18n && Object.hasOwn(i18n, language)
+			? i18n[language]
+			: undefined
+		: data
 	if (language && !text)
 		throw new LiteraryUniverseApiError(
 			'NOT_FOUND',
 			`The post has no ${language} translation`,
 		)
+	// A legacy translation without a date shows whenever the original does.
+	const publishedAt =
+		(language && text && !('publishedAt' in text)
+			? original.publishedAt
+			: text?.publishedAt) ?? null
 	return {
 		id: post.id,
 		version: post.version,
@@ -1057,26 +1063,35 @@ function postView(
 		slug: text?.slug,
 		intro: text?.intro,
 		tags: text?.tags ?? [],
-		// A legacy translation without a date shows whenever the original does.
-		publishedAt:
-			(language && text && !('publishedAt' in text)
-				? original.publishedAt
-				: text?.publishedAt) ?? null,
+		publishedAt,
+		// Readers see it now: its date has come, and for a translation the original's too.
+		live: due(publishedAt) && (!language || due(original.publishedAt)),
 		isAIGenerated: text?.isAIGenerated ?? original.isAIGenerated ?? false,
+		aiModel: text?.aiModel ?? original.aiModel ?? null,
 		...(format === 'json'
 			? { content: tiptapOf(text?.content as Json | undefined) ?? null }
 			: { markdown: text?.markdown ?? null }),
 	}
 }
+const due = (date: unknown) =>
+	date != null && Date.parse(String(date)) <= Date.now()
 function postSummary(post: BlogDocument, language?: string): Json {
 	const summary: Json = postView(post, language)
 	delete summary.markdown
 	return summary
 }
 const blogId = z.string().min(1).describe('From list-blogs')
+const tiptapInput = z
+	.record(z.string(), z.unknown())
+	.optional()
+	.describe('Tiptap JSON instead of markdown, as get-blog-post format json returns')
 const postText = {
 	title: z.string().max(200).optional(),
-	slug: z.string().max(200).optional().describe('URL segment, lowercase'),
+	slug: z
+		.string()
+		.max(100)
+		.optional()
+		.describe('URL segment: lowercase letters, digits, - and _'),
 	intro: z.string().max(500).optional().describe('Teaser shown in lists'),
 	markdown: z.string().optional().describe('The body as Markdown'),
 	tags: z.array(z.string()).max(30).optional(),
@@ -1093,7 +1108,7 @@ const blogs: Record<string, Spec> = {
 	'list-blogs': tool({
 		title: 'List blogs',
 		description:
-			'Blogs this account may post to (canPost) or manage: personal, organization and delegated.',
+			'Blogs this account may post to (canPost) or manage: personal, organization and delegated. The post tools need canPost.',
 		input: {},
 		annotations: READ,
 		run: async (client) => ({ blogs: await client.blogs() }),
@@ -1139,7 +1154,11 @@ const blogsWrite: Record<string, Spec> = {
 			blogId,
 			...postText,
 			title: z.string().min(1).max(200),
-			slug: z.string().min(1).max(200).describe('URL segment, lowercase'),
+			slug: z
+				.string()
+				.min(1)
+				.max(100)
+				.describe('URL segment: lowercase letters, digits, - and _'),
 			language: z
 				.string()
 				.optional()
@@ -1164,16 +1183,13 @@ const blogsWrite: Record<string, Spec> = {
 	'update-blog-post': tool({
 		title: 'Update blog post',
 		description:
-			'Change the original at expectedVersion; only the given fields change. Edits to a published post are live at once.',
+			'Change the original at expectedVersion; only the given fields change. Edits to a published post are live at once. A body with blog widgets fails with CONTENT_UNSUPPORTED or MARKDOWN_UNSUPPORTED: leave it out, or edit in the web editor.',
 		input: {
 			blogId,
 			postId: id,
 			expectedVersion: z.string(),
 			...postText,
-			content: z
-				.record(z.string(), z.unknown())
-				.optional()
-				.describe('Tiptap JSON instead of markdown, as get-blog-post format json returns'),
+			content: tiptapInput,
 			language: z.string().optional().describe("Move the original's language"),
 			coverFileId: z
 				.string()
@@ -1207,10 +1223,14 @@ const blogsWrite: Record<string, Spec> = {
 			expectedVersion: z.string(),
 			language: z.string().describe('Content code such as cs'),
 			...postText,
+			content: tiptapInput,
 			...disclosure,
 		},
 		annotations: hints(false, true, true),
-		run: async (client, { blogId, postId, expectedVersion, language, ...post }) =>
+		run: async (
+			client,
+			{ blogId, postId, expectedVersion, language, content, ...post },
+		) =>
 			postView(
 				await client.mutateBlogPost({
 					blogId,
@@ -1218,7 +1238,7 @@ const blogsWrite: Record<string, Spec> = {
 					action: 'translate',
 					expectedVersion,
 					language,
-					post,
+					post: { ...post, content: content as JsonValue | undefined },
 				}),
 				language,
 			),
