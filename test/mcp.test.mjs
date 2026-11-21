@@ -70,6 +70,8 @@ test('selectTools expands categories and names, dedupes, and rejects unknown ent
 	assert.ok(defaults.includes('get-identity'))
 	assert.ok(defaults.includes('save-chapter-draft'))
 	assert.ok(!defaults.includes('publish-chapter'))
+	assert.ok(!defaults.includes('create-universe'))
+	assert.ok(TOOL_CATEGORIES.creation.includes('create-universe'))
 	assert.deepEqual(selectTools(DEFAULT_TOOL_SELECTION), defaults)
 	assert.deepEqual(selectTools(['publish']), [
 		'publish-chapter',

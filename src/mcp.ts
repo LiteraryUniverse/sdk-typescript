@@ -186,6 +186,26 @@ const creation: Record<string, Spec> = {
 		annotations: CREATE,
 		run: (client, args) => client.createStory(args),
 	}),
+	'create-universe': tool({
+		title: 'Create a universe',
+		description:
+			'Create an unpublished universe after the author reviews its details. Ask for missing fields using get-story-creation-options (languages, genres, ratings, licenses); never choose a license or AI disclosure for the author. Not automatically retried: after an uncertain response, look for the slug in list-universes first.',
+		input: {
+			title: z.string().min(1).max(100),
+			slug: z
+				.string()
+				.max(100)
+				.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+			description: z.string().min(1).max(800),
+			genre: z.string().min(1),
+			rating: z.string().min(1),
+			license: z.string().min(1),
+			language: z.string().min(1),
+			aiModel,
+		},
+		annotations: CREATE,
+		run: (client, args) => client.createUniverse(args),
+	}),
 }
 
 const bodyShape = {
@@ -807,26 +827,6 @@ const universesWrite: Record<string, Spec> = {
 		annotations: WRITE,
 		run: (client, { universeId, expectedVersion, ...input }) =>
 			client.updateUniverse({ universeId, input, expectedVersion }),
-	}),
-	'create-universe': tool({
-		title: 'Create a universe',
-		description:
-			'Create an unpublished universe after the author reviews its details. Ask for missing fields using get-story-creation-options (languages, genres, ratings, licenses); never choose a license or AI disclosure for the author. Not automatically retried: after an uncertain response, look for the slug in list-universes first.',
-		input: {
-			title: z.string().min(1).max(100),
-			slug: z
-				.string()
-				.max(100)
-				.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-			description: z.string().min(1).max(800),
-			genre: z.string().min(1),
-			rating: z.string().min(1),
-			license: z.string().min(1),
-			language: z.string().min(1),
-			aiModel,
-		},
-		annotations: CREATE,
-		run: (client, args) => client.createUniverse(args),
 	}),
 	'create-universe-translation': tool({
 		title: 'Create universe translation',

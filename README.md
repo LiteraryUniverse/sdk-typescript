@@ -556,7 +556,8 @@ await server.connect(new StdioServerTransport())
 every tool that needs an account answer `Not signed in to Literary Universe`.
 Tools are grouped in categories; `tools` selects categories and/or tool names
 (`'all'` for every tool) and replaces the default selection, which leaves out
-`publish`: `account`, `stories` (`list-stories`, `get-story`, `list-chapters`,
+`publish` and `creation` (`get-story-creation-options`, `create-story`,
+`create-universe`): `account`, `stories` (`list-stories`, `get-story`, `list-chapters`,
 `get-chapter-draft`), `stories-write` (`save-chapter-draft`, `create-chapter`,
 `update-story`, `set-story-visibility`, `rename-chapter`, `reorder-chapters`,
 `remove-chapter`), `publish` (`publish-chapter`, which does nothing without
