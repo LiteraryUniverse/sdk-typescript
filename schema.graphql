@@ -153,6 +153,12 @@ type Mutation {
   authorSaveChapterDraft(input: AuthorDraftSaveInput!): AuthorDraftSaveResult!
 
   """
+  Create an unpublished universe owned by the signed-in member. Fails with
+  CONFLICT for a taken address.
+  """
+  createAuthorUniverse(input: AuthorUniverseCreateInput!): AuthorUniverseCreated!
+
+  """
   Hide a published story from readers, or show it again. Fails with
   BAD_USER_INPUT for a story that was never published.
   """
@@ -181,7 +187,15 @@ type Mutation {
   Change a universe's own title, address, description, genre, rating, license
   or language. Fails with CONFLICT for a taken address.
   """
-  updateAuthorUniverse(universeId: ID!, input: AuthorUniverseUpdateInput!): AuthorUniverseHeader!
+  updateAuthorUniverse(
+    universeId: ID!
+    input: AuthorUniverseUpdateInput!
+
+    """
+    The version read with the universe; fails with VERSION_CONFLICT when it changed since.
+    """
+    expectedVersion: String
+  ): AuthorUniverseHeader!
 
   """
   Add a draft entry with its category's template fields. Fails with CONFLICT,
@@ -190,7 +204,15 @@ type Mutation {
   createAuthorEncyclopediaEntry(input: AuthorEncyclopediaEntryCreateInput!): AuthorEncyclopediaEntry!
 
   """Change an entry in its original language."""
-  updateAuthorEncyclopediaEntry(id: ID!, changes: AuthorEncyclopediaEntryChangesInput!): AuthorEncyclopediaEntry!
+  updateAuthorEncyclopediaEntry(
+    id: ID!
+    changes: AuthorEncyclopediaEntryChangesInput!
+
+    """
+    The original's version as read; the write fails with VERSION_CONFLICT when it changed since.
+    """
+    expectedVersion: String
+  ): AuthorEncyclopediaEntry!
 
   """
   Write an entry's edition in a language the universe is translated into.
@@ -198,7 +220,17 @@ type Mutation {
   """
   translateAuthorEncyclopediaEntry(input: AuthorEncyclopediaEntryTranslationInput!): AuthorEncyclopediaEntry!
 
-  """Publish an entry to readers, or take it back to a draft."""
+  """
+  Release one edition of an entry to beta readers or to everyone, now or at
+  publishAt. Fails with VERSION_CONFLICT when the edition changed since
+  expectedVersion was read; a retry with the same operationId answers with
+  the first release.
+  """
+  publishAuthorEncyclopediaEntry(input: AuthorEncyclopediaEntryReleaseInput!): AuthorEncyclopediaEntry!
+
+  """
+  Release an entry and all its translations to readers, or take it back to a draft.
+  """
   setAuthorEncyclopediaEntryPublication(id: ID!, published: Boolean!): AuthorEncyclopediaEntry!
 
   """
@@ -217,7 +249,15 @@ type Mutation {
   Change a story's details. Fails with FORBIDDEN for a universe the
   credential cannot use, and FAILED_PRECONDITION for a rating under review.
   """
-  updateAuthorStory(storyId: ID!, input: AuthorStoryUpdateInput!): AuthorStoryHeader!
+  updateAuthorStory(
+    storyId: ID!
+    input: AuthorStoryUpdateInput!
+
+    """
+    The version read with the story; fails with VERSION_CONFLICT when it changed since.
+    """
+    expectedVersion: String
+  ): AuthorStoryHeader!
   mutateAuthorBlog(input: AuthorBlogMutationInput!): AuthorBlogDocument!
 
   """
@@ -315,6 +355,24 @@ type AuthorStory {
   state: AuthorWorkState!
   description: String
   authorsNotes: JSON
+
+  """Genre values, as the genre list names them."""
+  genres: [String!]!
+  tags: [String!]!
+  rating: String
+  license: String
+
+  """Whether an AI model wrote the text; readers see the disclosure."""
+  isAIGenerated: Boolean!
+  aiModel: String
+
+  """
+  Changes with the details above; pass it as expectedVersion to updateAuthorStory.
+  """
+  version: String!
+
+  """Languages the story is translated into besides its own."""
+  translations: [Locale!]!
 }
 
 type AuthorUniverseHeader {
@@ -347,6 +405,18 @@ type AuthorUniverse {
   privateAt: DateTime
   state: AuthorWorkState!
   description: String
+  genre: String
+  rating: String
+  license: String
+
+  """Whether an AI model wrote the text; readers see the disclosure."""
+  isAIGenerated: Boolean!
+  aiModel: String
+
+  """
+  Changes with the details above; pass it as expectedVersion to updateAuthorUniverse.
+  """
+  version: String!
 
   """
   Translations of the title and description, each with the revision a change must name.
@@ -383,6 +453,11 @@ type AuthorChapterHeader {
   title: String!
   language: Locale!
   hasDraft: Boolean!
+
+  """
+  The draft version a save names. One for every language of the chapter: a save in any language changes it.
+  """
+  version: String!
   updatedAt: DateTime
   publishedAt: DateTime
 }
@@ -409,6 +484,11 @@ type AuthorChapterDraft {
   authorsNotes: JSON
   translatorsNotes: JSON
   counters: JSON
+
+  """
+  The AI model that wrote the chapter, when one did; one for every language of it.
+  """
+  aiModel: String
 }
 
 input AuthorDraftSaveInput {
@@ -424,6 +504,12 @@ input AuthorDraftSaveInput {
   Markdown converted on the server with the editor's own Markdown extension. Provide exactly one of content and markdown. Rejected with MARKDOWN_UNSUPPORTED if the stored draft has nodes, marks or attributes Markdown cannot preserve; use content instead.
   """
   markdown: String
+
+  """
+  The AI model that wrote this text; marks the chapter AI-generated. Removing
+  the mark is done in the workshop.
+  """
+  aiModel: String
 }
 
 type AuthorContentWarning {
@@ -451,6 +537,9 @@ input AuthorChapterCreateInput {
   content: JSON
   markdown: String
   isAIGenerated: Boolean
+
+  """The AI model that wrote the chapter; marks it AI-generated."""
+  aiModel: String
 }
 
 type AuthorChapterCreateResult {
@@ -536,6 +625,35 @@ input AuthorUniverseUpdateInput {
   rating: String
   license: String
   language: Locale
+
+  """
+  The AI model that wrote the universe; marks it AI-generated. Removing the mark is done in the workshop.
+  """
+  aiModel: String
+}
+
+input AuthorUniverseCreateInput {
+  title: String!
+
+  """The address segment: lowercase letters, digits and single hyphens."""
+  slug: String!
+  description: String!
+
+  """A genre value, as the genre list names it."""
+  genre: String!
+  rating: String!
+  license: String!
+  language: Locale!
+
+  """
+  The AI model that wrote the universe, when one did; readers see the disclosure.
+  """
+  aiModel: String
+}
+
+type AuthorUniverseCreated {
+  id: ID!
+  slug: String!
 }
 
 type AuthorEncyclopediaEntryHeader {
@@ -557,6 +675,38 @@ type AuthorEncyclopediaEntryHeader {
 
   """Languages the entry has besides its original."""
   translations: [Locale!]!
+
+  """The original and each translation with its current version."""
+  editions: [AuthorEncyclopediaEdition!]!
+}
+
+type AuthorEncyclopediaEdition {
+  language: Locale!
+
+  """Changes with every save of this edition; pass it as expectedVersion."""
+  version: String!
+
+  """
+  The newest release of this edition to any audience; a new release raises it.
+  """
+  releasedRevision: Int
+}
+
+"""The newest release of one edition to one audience."""
+type AuthorEncyclopediaRelease {
+  language: Locale!
+  audience: AuthorPublicationAudience!
+
+  """Counts the releases of this edition, from 1."""
+  revision: Int!
+
+  """When readers get it; in the future when scheduled."""
+  publishedAt: DateTime!
+
+  """
+  The edition's version when it was released; the draft has unreleased changes when its version differs.
+  """
+  version: String!
 }
 
 type AuthorEncyclopediaEntryConnection {
@@ -610,6 +760,15 @@ type AuthorEncyclopediaEntry {
 
   """The model named in the disclosure."""
   aiModel: String
+
+  """
+  This edition's version; changes with every save of it. Pass it as expectedVersion.
+  """
+  version: String!
+  editions: [AuthorEncyclopediaEdition!]!
+
+  """The newest release of each edition to each audience."""
+  released: [AuthorEncyclopediaRelease!]!
 }
 
 """A field by its title; a new title adds a text field."""
@@ -679,11 +838,27 @@ input AuthorEncyclopediaFieldTranslationInput {
   text: String!
 }
 
+input AuthorEncyclopediaEntryReleaseInput {
+  id: ID!
+
+  """The edition to release; the original when omitted."""
+  language: Locale
+  audience: AuthorPublicationAudience = READERS
+  publishAt: DateTime
+  expectedVersion: String!
+  operationId: ID!
+}
+
 input AuthorEncyclopediaEntryTranslationInput {
   id: ID!
 
   """A language the universe is translated into."""
   language: Locale!
+
+  """
+  The edition's version as read; the write fails with VERSION_CONFLICT when it changed since.
+  """
+  expectedVersion: String
   name: String
   pronunciation: String
   summary: String
@@ -735,6 +910,11 @@ input AuthorStoryUpdateInput {
   Another universe needs edit rights on it; null makes the story standalone.
   """
   universeId: ID
+
+  """
+  The AI model that wrote the story; marks it AI-generated. Removing the mark is done in the workshop.
+  """
+  aiModel: String
 }
 
 """

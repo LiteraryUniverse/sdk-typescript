@@ -13,6 +13,9 @@ query LuStoryCreationOptions {
     licenses { value name description }
   }
 }
+mutation LuCreateUniverse($input: AuthorUniverseCreateInput!) {
+  result: createAuthorUniverse(input: $input) { id slug }
+}
 mutation LuCreateStory($input: AuthorStoryCreateInput!) {
   result: createAuthorStory(input: $input) { id slug }
 }
@@ -24,7 +27,10 @@ query LuStories($first: Int, $after: String) {
   }
 }
 query LuStory($id: ID!) {
-  result: authorStory(id: $id) { id title slug language universeId organizationId createdAt updatedAt publishedAt privateAt state description authorsNotes }
+  result: authorStory(id: $id) {
+    id title slug language universeId organizationId createdAt updatedAt publishedAt privateAt state description authorsNotes
+    genres tags rating license isAIGenerated aiModel version translations
+  }
 }
 query LuUniverses($first: Int, $after: String) {
   result: authorUniverses(first: $first, after: $after) {
@@ -35,22 +41,23 @@ query LuUniverses($first: Int, $after: String) {
 query LuUniverse($id: ID!) {
   result: authorUniverse(id: $id) {
     id title slug language organizationId createdAt updatedAt publishedAt privateAt state description
+    genre rating license isAIGenerated aiModel version
     translations { language title description revision }
   }
 }
 query LuChapters($storyId: ID!, $language: Locale, $first: Int, $after: String) {
   result: authorChapters(storyId: $storyId, language: $language, first: $first, after: $after) {
-    nodes { id storyId sequence title language hasDraft updatedAt publishedAt }
+    nodes { id storyId sequence title language hasDraft version updatedAt publishedAt }
     pageInfo { endCursor hasNextPage }
   }
 }
 query LuDraft($id: ID!, $language: Locale) {
-  result: authorChapterDraft(id: $id, language: $language) { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters }
+  result: authorChapterDraft(id: $id, language: $language) { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters aiModel }
 }
 mutation LuSaveDraft($input: AuthorDraftSaveInput!) {
   result: authorSaveChapterDraft(input: $input) {
     version recoveryId warnings { code path message }
-    draft { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters }
+    draft { id storyId sequence title language version updatedAt publishedAt content html text oldHtml markdown authorsNotes translatorsNotes counters aiModel }
   }
 }
 query LuValidateDraft($input: AuthorDraftSaveInput!) {
@@ -77,8 +84,8 @@ mutation LuUpdateUniverseTranslation($universeId: ID!, $language: Locale!, $expe
   }
 }
 
-mutation LuUpdateStory($storyId: ID!, $input: AuthorStoryUpdateInput!) {
-  result: updateAuthorStory(storyId: $storyId, input: $input) { id title slug language universeId organizationId createdAt updatedAt publishedAt privateAt state }
+mutation LuUpdateStory($storyId: ID!, $input: AuthorStoryUpdateInput!, $expectedVersion: String) {
+  result: updateAuthorStory(storyId: $storyId, input: $input, expectedVersion: $expectedVersion) { id title slug language universeId organizationId createdAt updatedAt publishedAt privateAt state }
 }
 mutation LuSetStoryVisibility($storyId: ID!, $visibility: AuthorStoryVisibility!) {
   result: setAuthorStoryVisibility(storyId: $storyId, visibility: $visibility) { id title slug language universeId organizationId createdAt updatedAt publishedAt privateAt state }
@@ -92,12 +99,12 @@ mutation LuRemoveChapter($input: AuthorChapterRemoveInput!) {
 mutation LuReorderChapters($input: AuthorChapterReorderInput!) {
   result: reorderAuthorChapters(input: $input) { storyId chapterIds }
 }
-mutation LuUpdateUniverse($universeId: ID!, $input: AuthorUniverseUpdateInput!) {
-  result: updateAuthorUniverse(universeId: $universeId, input: $input) { id title slug language organizationId createdAt updatedAt publishedAt privateAt state }
+mutation LuUpdateUniverse($universeId: ID!, $input: AuthorUniverseUpdateInput!, $expectedVersion: String) {
+  result: updateAuthorUniverse(universeId: $universeId, input: $input, expectedVersion: $expectedVersion) { id title slug language organizationId createdAt updatedAt publishedAt privateAt state }
 }
 query LuEncyclopediaEntries($universeId: ID!, $first: Int, $after: String) {
   result: authorEncyclopediaEntries(universeId: $universeId, first: $first, after: $after) {
-    nodes { id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations }
+    nodes { id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations editions { language version releasedRevision } }
     pageInfo { endCursor hasNextPage }
   }
 }
@@ -107,7 +114,10 @@ query LuEncyclopediaEntry($id: ID!, $language: Locale) {
     pronunciation tags summary
     parent { id name }
     related { id name }
-    fields { id title type private text }
+    fields { id title type private text isAIGenerated aiModel }
+    isAIGenerated aiModel version
+    editions { language version }
+    released { language audience revision publishedAt version }
   }
 }
 mutation LuCreateEncyclopediaEntry($input: AuthorEncyclopediaEntryCreateInput!) {
@@ -116,16 +126,22 @@ mutation LuCreateEncyclopediaEntry($input: AuthorEncyclopediaEntryCreateInput!) 
     pronunciation tags summary
     parent { id name }
     related { id name }
-    fields { id title type private text }
+    fields { id title type private text isAIGenerated aiModel }
+    isAIGenerated aiModel version
+    editions { language version }
+    released { language audience revision publishedAt version }
   }
 }
-mutation LuUpdateEncyclopediaEntry($id: ID!, $changes: AuthorEncyclopediaEntryChangesInput!) {
-  result: updateAuthorEncyclopediaEntry(id: $id, changes: $changes) {
+mutation LuUpdateEncyclopediaEntry($id: ID!, $changes: AuthorEncyclopediaEntryChangesInput!, $expectedVersion: String) {
+  result: updateAuthorEncyclopediaEntry(id: $id, changes: $changes, expectedVersion: $expectedVersion) {
     id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations
     pronunciation tags summary
     parent { id name }
     related { id name }
-    fields { id title type private text }
+    fields { id title type private text isAIGenerated aiModel }
+    isAIGenerated aiModel version
+    editions { language version }
+    released { language audience revision publishedAt version }
   }
 }
 mutation LuTranslateEncyclopediaEntry($input: AuthorEncyclopediaEntryTranslationInput!) {
@@ -134,7 +150,10 @@ mutation LuTranslateEncyclopediaEntry($input: AuthorEncyclopediaEntryTranslation
     pronunciation tags summary
     parent { id name }
     related { id name }
-    fields { id title type private text }
+    fields { id title type private text isAIGenerated aiModel }
+    isAIGenerated aiModel version
+    editions { language version }
+    released { language audience revision publishedAt version }
   }
 }
 mutation LuSetEncyclopediaEntryPublication($id: ID!, $published: Boolean!) {
@@ -143,7 +162,22 @@ mutation LuSetEncyclopediaEntryPublication($id: ID!, $published: Boolean!) {
     pronunciation tags summary
     parent { id name }
     related { id name }
-    fields { id title type private text }
+    fields { id title type private text isAIGenerated aiModel }
+    isAIGenerated aiModel version
+    editions { language version }
+    released { language audience revision publishedAt version }
+  }
+}
+mutation LuPublishEncyclopediaEntry($input: AuthorEncyclopediaEntryReleaseInput!) {
+  result: publishAuthorEncyclopediaEntry(input: $input) {
+    id universeId name categoryId categoryTitle language wip publishedAt updatedAt translations
+    pronunciation tags summary
+    parent { id name }
+    related { id name }
+    fields { id title type private text isAIGenerated aiModel }
+    isAIGenerated aiModel version
+    editions { language version }
+    released { language audience revision publishedAt version }
   }
 }
 mutation LuDeleteEncyclopediaEntry($id: ID!) {

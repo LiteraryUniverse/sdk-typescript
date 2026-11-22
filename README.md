@@ -153,10 +153,10 @@ Organization keys cannot upload covers or chapter images yet; use a personal key
 
 | Method | Scope | Result |
 | --- | --- | --- |
-| `updateStory({storyId, input})` | `story:write` | The story header after the change |
+| `updateStory({storyId, input, expectedVersion?})` | `story:write` | The story header after the change |
 | `setStoryVisibility({storyId, visibility})` | `story:write` | The story header; `privateAt` is set while it is hidden |
 
-`input` takes `title`, `description`, `genres`, `tags`, `rating`, `license`, `language` and `universeId`; only the fields you give change. Moving a story to another universe takes the story owner's rights (the owner or an admin of the owning organization) and edit rights on the target universe, as the workshop does; `universeId: null` makes it standalone. A rating under staff review stays as it is (`FAILED_PRECONDITION`).
+`input` takes `title`, `description`, `genres`, `tags`, `rating`, `license`, `language`, `universeId` and `aiModel`; only the fields you give change. `aiModel` marks the story as written by that model; the API only sets the mark, and removing it is done in the workshop. `story({id})` returns these details with a `version` and the story's `translations`; pass the version as `expectedVersion` and a story changed since fails with `VERSION_CONFLICT`. Moving a story to another universe takes the story owner's rights (the owner or an admin of the owning organization) and edit rights on the target universe, as the workshop does; `universeId: null` makes it standalone. A rating under staff review stays as it is (`FAILED_PRECONDITION`).
 
 `PRIVATE` hides a published story from readers and its universe's story count; `PUBLIC` shows it again. A story that was never published fails with `BAD_USER_INPUT`.
 
@@ -174,9 +174,12 @@ Renaming and reordering apply to published chapters too, and readers see the cha
 
 | Method | Scope | Result |
 | --- | --- | --- |
-| `updateUniverse({universeId, input})` | `universe:write` | The universe header after the change |
+| `createUniverse({title, slug, genre, rating, license, language, description?, aiModel?})` | `universe:write` | `{id, slug}` of the new unpublished universe |
+| `updateUniverse({universeId, input, expectedVersion?})` | `universe:write` | The universe header after the change |
 
-`input` takes `title`, `slug`, `description`, `genre`, `rating`, `license` and `language`. A `slug` is lowercase letters, digits and single hyphens; one in use by another universe fails with `CONFLICT`. `genre` is a genre value such as `fantasy`. A rating under staff review does not change (`FAILED_PRECONDITION`). Translations of the title and description go through `updateUniverseTranslation`.
+Creation needs a verified account and a personal key without resource restrictions; the universe is owned by you, with the default encyclopedia categories, as the workshop creates it. A taken `slug` fails with `CONFLICT`. Creation is never retried: after a lost response, look for the slug in `universes()` first. Read the choices from `storyCreationOptions()`.
+
+`input` takes `title`, `slug`, `description`, `genre`, `rating`, `license`, `language` and `aiModel` (sets the AI disclosure, as for stories). `universe({id})` returns these details with a `version` for `expectedVersion`. A `slug` is lowercase letters, digits and single hyphens; one in use by another universe fails with `CONFLICT`. `genre` is a genre value such as `fantasy`. A rating under staff review does not change (`FAILED_PRECONDITION`). Translations of the title and description go through `updateUniverseTranslation`.
 
 ## Encyclopedia
 
@@ -185,6 +188,7 @@ Renaming and reordering apply to published chapters too, and readers see the cha
 | `createEncyclopediaEntry({universeId, name, categoryTitle, ...})` | `universe:write` | The new draft entry |
 | `updateEncyclopediaEntry({id, changes})` | `universe:write` | The entry after the change |
 | `translateEncyclopediaEntry({id, language, ...})` | `universe:translate` or `universe:write` | The entry's edition in that language |
+| `publishEncyclopediaEntry({id, language?, audience?, publishAt?, expectedVersion, operationId})` | `universe:write` | The entry after the release |
 | `setEncyclopediaEntryPublication({id, published})` | `universe:write` | The entry, published or back to draft |
 | `deleteEncyclopediaEntry({id})` | `universe:write` | `{id, universeId}` of the deleted entry |
 
@@ -192,7 +196,9 @@ A new entry is a draft in a category the universe offers, named by its title, an
 
 `changes` sets the same values in the original language and may also change `name` and `categoryTitle`, remove links with `relatedRemove`, and clear the parent with `parentName: null`. Text is plain; the server turns it into the editor's format. A text field of a new title is added; a field that holds something other than text is refused. `translateEncyclopediaEntry` writes an edition in a language the universe is translated into (`FAILED_PRECONDITION` otherwise): `name`, `pronunciation`, `summary` and `fields`, each named by its original title with an optional `translatedTitle`. A new edition starts as a copy of the original.
 
-Publishing shows the entry to readers; unpublishing returns it to a draft. Deletion can be undone by staff and removes the entry from the parent and related links of the universe's other entries.
+Each edition (the original and every translation) has a `version` that changes with every save of it; `editions` in lists and entries name them. `updateEncyclopediaEntry({id, changes, expectedVersion})` and `translateEncyclopediaEntry({..., expectedVersion})` fail with `VERSION_CONFLICT` when the edition changed since. `aiModel` in `changes` marks the entry as written by that model.
+
+Readers see released revisions, not the draft. `publishEncyclopediaEntry` releases one edition (`language`, the original when omitted) to `BETA` readers or `READERS`, now or at `publishAt`; a retry with the same `operationId` answers with the first release. Reader releases fail with `FORBIDDEN` when the universe or account may not publish. `released` lists the newest release of each edition and audience with the `version` released: when it differs from the edition's version, the draft holds unreleased changes. `setEncyclopediaEntryPublication` releases the original and every translation to readers at once, or returns the entry to a draft. Deletion can be undone by staff and removes the entry from the parent and related links of the universe's other entries.
 
 ## Series
 
@@ -394,6 +400,29 @@ deletes the files of chapters the server no longer has, and reports the chapter
 IDs added, updated and removed. `pullLocalProject` with `refresh: true` is the
 same call.
 
+## Vault sync
+
+```ts
+import { readVaultConfig, syncVault, vaultStatus, writeVaultConfig } from '@literary-universe/sdk/vault'
+
+await writeVaultConfig(files, { version: 1, baseUrl, scope: { kind: 'universe', universeId } })
+const report = await syncVault({ client, files, yaml, scope: (await readVaultConfig(files)).scope })
+// { created, updated, pushed, conflicts, failures }
+await vaultStatus({ files, yaml, scope })   // offline: [{ path, kind, state: 'edited' | 'conflict' | 'new' }]
+```
+
+`syncVault` keeps a folder of Markdown notes and Literary Universe in step, in both directions. The Literary Universe CLI (`lu sync`) and the Obsidian plugin both use it. You supply the storage (`files`: `list`, `read`, `write`, `rename`, `exists` with `/` paths relative to the folder) and a YAML parser (`yaml`: `parse`, `stringify`), so it runs in Node, Bun and Obsidian on desktop and mobile. The scope is a universe, one story, or every story you can write (`{ kind: 'workshop', folder }`), and `language` limits it to one language's editions.
+
+A universe folder holds `Universe.md` (and `Universe.<lang>.md` per translation), `Series.md`, `Stories/<title>/Story.md` with one note per chapter (`01 Title.md`, translations `01 Title.<lang>.md`), `Encyclopedia/<category>/<name>.md` (translations `<name>.<lang>.md`) and `Comics/<title>.md`. Notes keep their sync state in `lu_*` frontmatter and can be renamed and moved; other notes in the folder are left alone.
+
+- **What you edit:** the body and the frontmatter values without the `lu_` prefix. A chapter's `title` renames it and its `sequence` (from 1) moves it. An entry's body is its summary, then a `## Field` section per text field (`## Field (private)` for private ones); its folder is its category, and `parent` and `related` are `[[wikilinks]]`. Fields that are not text stay on Literary Universe.
+- **AI disclosure:** `ai_model` in the frontmatter is sent with every write of that note and marks the item as written by that model.
+- **Each sync** pulls, then pushes. Every write names the version it was based on. A note edited here while its item changed on Literary Universe stays as it is; the Literary Universe version is written beside it as `<name> (Literary Universe).md`, and the note is not pushed until that copy is deleted.
+- **New items:** a note with `lu_kind: chapter` and no `lu_id` in a story folder becomes a new chapter; `lu_kind: entry` in a category folder becomes a new entry.
+- **Deleting a note** deletes nothing on Literary Universe; the next sync brings it back.
+- `Series.md` and comic notes are written from Literary Universe on every sync; edit those there.
+- Releasing and publishing are never part of a sync.
+
 ## Images
 
 Install the existing supported image engine with `npm install sharp@0.35.5` in a
@@ -527,7 +556,8 @@ await server.connect(new StdioServerTransport())
 every tool that needs an account answer `Not signed in to Literary Universe`.
 Tools are grouped in categories; `tools` selects categories and/or tool names
 (`'all'` for every tool) and replaces the default selection, which leaves out
-`publish`: `account`, `stories` (`list-stories`, `get-story`, `list-chapters`,
+`publish` and `creation` (`get-story-creation-options`, `create-story`,
+`create-universe`): `account`, `stories` (`list-stories`, `get-story`, `list-chapters`,
 `get-chapter-draft`), `stories-write` (`save-chapter-draft`, `create-chapter`,
 `update-story`, `set-story-visibility`, `rename-chapter`, `reorder-chapters`,
 `remove-chapter`), `publish` (`publish-chapter`, which does nothing without
