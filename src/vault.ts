@@ -725,16 +725,19 @@ class Sync {
 			throw new LiteraryUniverseApiError('NOT_FOUND', 'Story not found')
 		const key = this.key('story', id)
 		const existing = this.notes.get(key)
-		// Two stories can share a title; each gets its own folder.
+		// Two stories can share a title; each gets its own folder. A folder is
+		// another story's while its Story.md or any of its chapter notes is there.
 		const taken =
 			folder &&
 			([...this.storyDirs.values()].includes(folder) ||
-				[...this.notes.values()].some(
-					(note) =>
-						note.meta.lu_kind === 'story' &&
-						note.meta.lu_id !== id &&
-						dirname(note.path) === folder,
-				))
+				[...this.notes.values()].some((note) => {
+					const owner = str(
+						note.meta.lu_kind === 'story'
+							? note.meta.lu_id
+							: note.meta.lu_story,
+					)
+					return owner && owner !== id && dirname(note.path) === folder
+				}))
 		const dir = existing
 			? dirname(existing.path)
 			: taken
