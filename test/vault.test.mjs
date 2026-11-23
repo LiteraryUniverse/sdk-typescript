@@ -47,6 +47,7 @@ function memoryFiles(initial = {}) {
 /** Just enough of Literary Universe for the engine, with every call recorded. */
 function fakeServer() {
 	const calls = []
+	const listed = []
 	const page = (nodes) => ({
 		nodes,
 		pageInfo: { endCursor: null, hasNextPage: false },
@@ -156,11 +157,13 @@ function fakeServer() {
 	const record = (name, input) => calls.push([name, input])
 	const client = {
 		universe: async () => state.universe,
-		stories: async () =>
-			page([
+		stories: async (input) => {
+			listed.push(['stories', input.universeId])
+			return page([
 				{ id: 's1', title: state.story.title, universeId: 'u1' },
 				{ id: 'other', title: 'Elsewhere', universeId: null },
-			]),
+			])
+		},
 		story: async ({ id }) => (id === 's1' ? state.story : null),
 		chapters: async ({ language }) =>
 			page(
@@ -267,8 +270,9 @@ function fakeServer() {
 		series: async () => [
 			{ id: 'r1', title: 'Reading order', storyIds: ['s1'] },
 		],
-		comics: async () =>
-			page([
+		comics: async (input) => {
+			listed.push(['comics', input.universeId])
+			return page([
 				{
 					id: 'k1',
 					title: 'Skyward',
@@ -280,9 +284,10 @@ function fakeServer() {
 					description: 'Up.',
 					aiModel: null,
 				},
-			]),
+			])
+		},
 	}
-	return { client, state, calls }
+	return { client, state, calls, listed }
 }
 
 let server
@@ -335,6 +340,11 @@ test('pulls a universe as notes and changes nothing on a second sync', async () 
 	assert.deepEqual(entry.meta.lu_released, { readers: 1 })
 	assert.match(files.store.get('Series.md'), /1\. \[\[Balance\]\]/)
 	assert.equal(files.store.get('Notes/plan.md'), '# My own notes')
+	// The server filters by universe; listing everything the account can write is slow.
+	assert.deepEqual(server.listed, [
+		['stories', 'u1'],
+		['comics', 'u1'],
+	])
 
 	const second = await sync()
 	assert.deepEqual(

@@ -347,7 +347,11 @@ class Sync {
 		if (scope.kind === 'universe') {
 			await this.attempt('Universe', () => this.pullUniverse(scope.universeId))
 			const stories = await all((after) =>
-				this.o.client.stories({ first: 100, after }),
+				this.o.client.stories({
+					first: 100,
+					after,
+					universeId: scope.universeId,
+				}),
 			)
 			for (const story of stories)
 				if (story.universeId === scope.universeId) {
@@ -1068,7 +1072,7 @@ class Sync {
 
 	async pullComics(universeId: string) {
 		const comics = await all((after) =>
-			this.o.client.comics({ first: 100, after }),
+			this.o.client.comics({ first: 100, after, universeId }),
 		)
 		for (const comic of comics.filter(
 			(item) => item.universeId === universeId,

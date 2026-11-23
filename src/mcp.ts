@@ -75,6 +75,16 @@ const page = {
 	first: z.number().int().min(1).max(100).optional().describe('Page size'),
 	after: z.string().optional().describe('endCursor of the previous page'),
 }
+const organizationId = z
+	.string()
+	.optional()
+	.describe(
+		"List this organization's works; without it the list holds only works outside every organization",
+	)
+const universeId = z
+	.string()
+	.optional()
+	.describe("List only this universe's works, whoever owns them")
 const language = z
 	.string()
 	.optional()
@@ -116,8 +126,9 @@ const draftText = (result: Json) =>
 const stories: Record<string, Spec> = {
 	'list-stories': tool({
 		title: 'List stories',
-		description: 'A page of the stories this account can write.',
-		input: page,
+		description:
+			'A page of the stories this account can write. Organization stories are listed only with organizationId or universeId.',
+		input: { ...page, organizationId, universeId },
 		annotations: READ,
 		run: (client, args) => client.stories(args),
 	}),
@@ -539,8 +550,8 @@ const comics: Record<string, Spec> = {
 	'list-comics': tool({
 		title: 'List comics',
 		description:
-			'A page of the comics, manga and webtoons this account creates on.',
-		input: page,
+			'A page of the comics, manga and webtoons this account creates on. Organization comics are listed only with organizationId or universeId.',
+		input: { ...page, organizationId, universeId },
 		annotations: READ,
 		run: (client, args) => client.comics(args),
 	}),
@@ -768,8 +779,9 @@ const comicsWrite: Record<string, Spec> = {
 const universes: Record<string, Spec> = {
 	'list-universes': tool({
 		title: 'List universes',
-		description: 'A page of the universes this account can write.',
-		input: page,
+		description:
+			'A page of the universes this account can write. Organization universes are listed only with organizationId.',
+		input: { ...page, organizationId },
 		annotations: READ,
 		run: (client, args) => client.universes(args),
 	}),

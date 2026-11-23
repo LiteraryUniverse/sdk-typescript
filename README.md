@@ -75,9 +75,9 @@ try {
 | --- | --- | --- |
 | `identity()` | Any valid credential | API version, deployment label/URL, credential identity, granted scopes/restrictions and limits |
 | `profile()` | `user:read` | Your user ID and optional username |
-| `universes({first, after})` | `universe:read` | Paginated author/team universe headers |
+| `universes({first, after, organizationId})` | `universe:read` | Paginated author/team universe headers outside every organization; `organizationId` lists that organization's universes instead |
 | `universe({id})` | `universe:read` | Universe metadata and its translations, each with its `revision` |
-| `stories({first, after})` | `story:read` | Paginated author/team story headers |
+| `stories({first, after, organizationId, universeId})` | `story:read` | Paginated author/team story headers outside every organization; `organizationId` or `universeId` lists that organization's or universe's stories instead |
 | `story({id})` | `story:read` | Story metadata and author notes |
 | `chapters({storyId, language, first, after})` | `story:read` | Chapter headers without bodies |
 | `draft({id, language})` | `story:read` | Stored working draft, including JSON, HTML/text/legacy representations and notes/counters |
@@ -112,7 +112,7 @@ Comics, manga and webtoons have their own scopes: `comic:read`, `comic:write` an
 
 | Method | Scope | Result |
 | --- | --- | --- |
-| `comics({first, after})` | `comic:read` | Paginated comics you create on |
+| `comics({first, after, organizationId, universeId})` | `comic:read` | Paginated comics you create on outside every organization; `organizationId` or `universeId` lists that organization's or universe's comics instead |
 | `comic({id})` | `comic:read` | Format, language, license, rating, cover URL and counts |
 | `comicChapters({comicId})` | `comic:read` | Chapters in reading order; translation editions carry `parentChapterId` |
 | `comicPages({chapterId})` | `comic:read` | Draft pages in order, with their layers |
@@ -411,7 +411,7 @@ const report = await syncVault({ client, files, yaml, scope: (await readVaultCon
 await vaultStatus({ files, yaml, scope })   // offline: [{ path, kind, state: 'edited' | 'conflict' | 'new' }]
 ```
 
-`syncVault` keeps a folder of Markdown notes and Literary Universe in step, in both directions. The Literary Universe CLI (`lu sync`) and the Obsidian plugin both use it. You supply the storage (`files`: `list`, `read`, `write`, `rename`, `exists` with `/` paths relative to the folder) and a YAML parser (`yaml`: `parse`, `stringify`), so it runs in Node, Bun and Obsidian on desktop and mobile. The scope is a universe, one story, or every story you can write (`{ kind: 'workshop', folder }`), and `language` limits it to one language's editions.
+`syncVault` keeps a folder of Markdown notes and Literary Universe in step, in both directions. The Literary Universe CLI (`lu sync`) and the Obsidian plugin both use it. You supply the storage (`files`: `list`, `read`, `write`, `rename`, `exists` with `/` paths relative to the folder) and a YAML parser (`yaml`: `parse`, `stringify`), so it runs in Node, Bun and Obsidian on desktop and mobile. The scope is a universe, one story, or every story you can write outside an organization (`{ kind: 'workshop', folder }`), and `language` limits it to one language's editions.
 
 A universe folder holds `Universe.md` (and `Universe.<lang>.md` per translation), `Series.md`, `Stories/<title>/Story.md` with one note per chapter (`01 Title.md`, translations `01 Title.<lang>.md`), `Encyclopedia/<category>/<name>.md` (translations `<name>.<lang>.md`) and `Comics/<title>.md`. Notes keep their sync state in `lu_*` frontmatter and can be renamed and moved; other notes in the folder are left alone.
 
