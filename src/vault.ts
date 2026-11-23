@@ -384,11 +384,17 @@ class Sync {
 			// The listing leaves out organization stories; one already in the folder keeps syncing.
 			const pulled = new Set(stories.map((story) => story.id))
 			for (const note of [...this.notes.values()]) {
-				const id = str(note.meta.lu_id)
-				if (note.meta.lu_kind === 'story' && !pulled.has(id))
-					await this.attempt(note.path, () =>
-						this.pullStory(id, dirname(note.path)),
-					)
+				const id = str(
+					note.meta.lu_kind === 'story' ? note.meta.lu_id : note.meta.lu_story,
+				)
+				if (!id || pulled.has(id)) continue
+				pulled.add(id)
+				await this.attempt(note.path, () =>
+					this.pullStory(id, dirname(note.path)).catch((error) => {
+						// Deleted or no longer readable: the notes stay as they are, and an edit still fails on push.
+						if (error?.code !== 'NOT_FOUND') throw error
+					}),
+				)
 			}
 		}
 		await this.push()

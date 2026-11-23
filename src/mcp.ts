@@ -78,7 +78,7 @@ const page = {
 const organizationId = id
 	.optional()
 	.describe(
-		"List this organization's works. With neither filter the list holds only works that belong to no organization (an organization key lists its own)",
+		"List this organization's works; without a filter the list holds only works that belong to no organization",
 	)
 const universeId = id
 	.optional()
@@ -125,7 +125,7 @@ const stories: Record<string, Spec> = {
 	'list-stories': tool({
 		title: 'List stories',
 		description:
-			'A page of the stories this account can write. Organization stories are listed only with organizationId or universeId.',
+			'A page of the stories this account can write. Organization stories are listed only with organizationId or universeId; an organization key lists its own.',
 		input: { ...page, organizationId, universeId },
 		annotations: READ,
 		run: (client, args) => client.stories(args),
@@ -778,7 +778,7 @@ const universes: Record<string, Spec> = {
 	'list-universes': tool({
 		title: 'List universes',
 		description:
-			'A page of the universes this account can write. Organization universes are listed only with organizationId.',
+			'A page of the universes this account can write. Organization universes are listed only with organizationId; an organization key lists its own.',
 		input: { ...page, organizationId },
 		annotations: READ,
 		run: (client, args) => client.universes(args),

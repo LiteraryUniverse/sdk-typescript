@@ -825,6 +825,14 @@ test('workshop scope keeps syncing a story the listing no longer names', async (
 	assert.deepEqual(report.failures, [])
 	assert.deepEqual(report.updated, ['Workshop/Balance/02 Two.md'])
 	assert.equal(note('Workshop/Balance/02 Two.md').body, 'Rewritten.')
+	// Chapter notes alone name the story, and the pull brings its Story.md back.
+	files.store.delete('Workshop/Balance/Story.md')
+	assert.deepEqual((await sync({ scope })).created, [
+		'Workshop/Balance/Story.md',
+	])
+	// A story that was deleted or lost stays a quiet archive.
+	server.client.story = async () => null
+	assert.deepEqual((await sync({ scope })).failures, [])
 })
 
 test('story scope pushes only that story and creates originals only', async () => {
