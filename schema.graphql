@@ -68,14 +68,16 @@ type Query {
 
   """
   The stories the caller writes that belong to no organization. Name an
-  organization or a universe to list its stories instead.
+  organization or a universe to list its stories instead. An organization
+  key lists its own organization's stories.
   """
   authorStories(first: Int = 25, after: String, organizationId: ID, universeId: ID): AuthorStoryConnection!
   authorStory(id: ID!): AuthorStory
 
   """
   The universes the caller writes that belong to no organization. Name an
-  organization to list its universes instead.
+  organization to list its universes instead. An organization key lists its
+  own organization's universes.
   """
   authorUniverses(first: Int = 25, after: String, organizationId: ID): AuthorUniverseConnection!
   authorUniverse(id: ID!): AuthorUniverse

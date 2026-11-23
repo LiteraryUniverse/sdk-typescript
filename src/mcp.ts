@@ -75,14 +75,12 @@ const page = {
 	first: z.number().int().min(1).max(100).optional().describe('Page size'),
 	after: z.string().optional().describe('endCursor of the previous page'),
 }
-const organizationId = z
-	.string()
+const organizationId = id
 	.optional()
 	.describe(
-		"List this organization's works; without it the list holds only works outside every organization",
+		"List this organization's works. With neither filter the list holds only works that belong to no organization (an organization key lists its own)",
 	)
-const universeId = z
-	.string()
+const universeId = id
 	.optional()
 	.describe("List only this universe's works, whoever owns them")
 const language = z

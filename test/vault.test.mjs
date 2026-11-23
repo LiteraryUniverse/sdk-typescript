@@ -806,6 +806,27 @@ test('an AI edit after another language was saved is no conflict', async () => {
 	assert.deepEqual(server.calls, [])
 })
 
+test('workshop scope keeps syncing a story the listing no longer names', async () => {
+	const scope = { kind: 'workshop', folder: 'Workshop' }
+	const listing = (nodes) => async () => ({
+		nodes,
+		pageInfo: { endCursor: null, hasNextPage: false },
+	})
+	server.client.stories = listing([{ id: 's1', title: 'Balance' }])
+	assert.deepEqual((await sync({ scope })).failures, [])
+	// An organization's story drops out of the listing; its notes are still here.
+	server.client.stories = listing([])
+	Object.assign(server.state.chapters[1], {
+		markdown: 'Rewritten.',
+		version: 'v2',
+		updatedAt: 't2',
+	})
+	const report = await sync({ scope })
+	assert.deepEqual(report.failures, [])
+	assert.deepEqual(report.updated, ['Workshop/Balance/02 Two.md'])
+	assert.equal(note('Workshop/Balance/02 Two.md').body, 'Rewritten.')
+})
+
 test('story scope pushes only that story and creates originals only', async () => {
 	await sync()
 	edit('Universe.md', ({ meta }) => ({ meta, body: 'Changed.' }))

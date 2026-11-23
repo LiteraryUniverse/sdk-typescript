@@ -42,7 +42,7 @@ export type VaultScope =
 	| { kind: 'universe'; universeId: string }
 	/** One story at the root. */
 	| { kind: 'story'; storyId: string }
-	/** Every story you can write, one folder each under `folder`. */
+	/** Every story you can write that belongs to no organization, one folder each under `folder`. */
 	| { kind: 'workshop'; folder: string }
 export type VaultConfig = {
 	version: 1
@@ -381,6 +381,15 @@ class Sync {
 						join(scope.folder, safeName(story.title, story.id)),
 					),
 				)
+			// The listing leaves out organization stories; one already in the folder keeps syncing.
+			const pulled = new Set(stories.map((story) => story.id))
+			for (const note of [...this.notes.values()]) {
+				const id = str(note.meta.lu_id)
+				if (note.meta.lu_kind === 'story' && !pulled.has(id))
+					await this.attempt(note.path, () =>
+						this.pullStory(id, dirname(note.path)),
+					)
+			}
 		}
 		await this.push()
 		return this.report
