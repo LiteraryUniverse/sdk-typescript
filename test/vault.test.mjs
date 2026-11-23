@@ -841,13 +841,35 @@ test('workshop scope keeps syncing a story the listing no longer names', async (
 		files.store.set(path, text)
 	const { story, chapters } = server.client
 	server.client.stories = listing([{ id: 's2', title: 'Balance' }])
-	server.client.story = async ({ id }) => ({ ...(await story({ id: 's1' })), id })
+	server.client.story = async ({ id }) => ({
+		...(await story({ id: 's1' })),
+		id,
+		slug: `balance-${id}`,
+	})
 	server.client.chapters = async (input) =>
 		input.storyId === 's2' ? (await listing([])()) : chapters(input)
 	assert.deepEqual((await sync({ scope })).failures, [])
 	assert.equal(note('Workshop/Elsewhere/Story.md').meta.lu_id, 's1')
-	assert.equal(note('Workshop/Balance (s2)/Story.md').meta.lu_id, 's2')
+	assert.equal(note('Workshop/Balance (balance-s2)/Story.md').meta.lu_id, 's2')
 	assert.equal(files.store.has('Workshop/Balance/Story.md'), false)
+	// A story whose title folder is another's stays where its chapter notes are.
+	const move = (from, to) => {
+		files.store.set(to, files.store.get(from))
+		files.store.delete(from)
+	}
+	move('Workshop/Balance (balance-s2)/Story.md', 'Workshop/Balance/Story.md')
+	files.store.delete('Workshop/Elsewhere/Story.md')
+	const titled = (...ids) => listing(ids.map((id) => ({ id, title: 'Balance' })))
+	server.client.stories = titled('s1', 's2')
+	const placed = await sync({ scope })
+	assert.deepEqual(placed.failures, [])
+	assert.deepEqual(placed.created, ['Workshop/Elsewhere/Story.md'])
+	// A slug folder that holds another story's notes is refused, not shared.
+	move('Workshop/Balance/Story.md', 'Workshop/Balance (balance-s3)/Story.md')
+	server.client.stories = titled('s1', 's2', 's3')
+	const refused = await sync({ scope })
+	assert.equal(refused.failures.length, 1)
+	assert.match(refused.failures[0], /\(balance-s3\)" holds another story's notes/)
 	// A story that was deleted or lost stays a quiet archive.
 	server.client.stories = listing([])
 	server.client.story = async () => null

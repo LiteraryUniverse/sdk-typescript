@@ -727,22 +727,30 @@ class Sync {
 		const existing = this.notes.get(key)
 		// Two stories can share a title; each gets its own folder. A folder is
 		// another story's while its Story.md or any of its chapter notes is there.
-		const taken =
-			folder &&
-			([...this.storyDirs.values()].includes(folder) ||
-				[...this.notes.values()].some((note) => {
-					const owner = str(
-						note.meta.lu_kind === 'story'
-							? note.meta.lu_id
-							: note.meta.lu_story,
-					)
-					return owner && owner !== id && dirname(note.path) === folder
-				}))
-		const dir = existing
-			? dirname(existing.path)
-			: taken
-				? `${folder} (${id.slice(0, 6)})`
-				: folder
+		const owned = (dir: string) =>
+			[...this.storyDirs.values()].includes(dir) ||
+			[...this.notes.values()].some((note) => {
+				const owner = str(
+					note.meta.lu_kind === 'story' ? note.meta.lu_id : note.meta.lu_story,
+				)
+				return owner && owner !== id && dirname(note.path) === dir
+			})
+		let dir = existing ? dirname(existing.path) : folder
+		if (!existing && folder && owned(folder)) {
+			// The second story of a title is named by its slug, which no other story has.
+			// One placed before slugs named folders stays where its chapter notes are.
+			const placed = [...this.notes.values()].find(
+				(note) => str(note.meta.lu_story) === id,
+			)
+			dir = placed
+				? dirname(placed.path)
+				: `${folder} (${safeName(story.slug ?? '', id.slice(0, 6))})`
+			if (!placed && owned(dir))
+				throw new LiteraryUniverseApiError(
+					'BAD_USER_INPUT',
+					`The folder "${dir}" holds another story's notes; move them out`,
+				)
+		}
 		this.storyDirs.set(id, dir)
 		this.storyLanguages.set(id, story.language)
 		await this.merge(
