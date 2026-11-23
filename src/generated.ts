@@ -402,6 +402,8 @@ export type LuProfileQuery = { result: { userId: string | null, username: string
 export type LuStoriesQueryVariables = Exact<{
   first?: number | null | undefined;
   after?: string | null | undefined;
+  organizationId?: string | number | null | undefined;
+  universeId?: string | number | null | undefined;
 }>;
 
 
@@ -417,6 +419,7 @@ export type LuStoryQuery = { result: { id: string, title: string, slug: string |
 export type LuUniversesQueryVariables = Exact<{
   first?: number | null | undefined;
   after?: string | null | undefined;
+  organizationId?: string | number | null | undefined;
 }>;
 
 
@@ -684,6 +687,8 @@ export type LuMutateBlogPostMutation = { result: { id: string, version: string, 
 export type LuComicsQueryVariables = Exact<{
   first?: number | null | undefined;
   after?: string | null | undefined;
+  organizationId?: string | number | null | undefined;
+  universeId?: string | number | null | undefined;
 }>;
 
 
@@ -831,9 +836,9 @@ export const LuStoryCreationOptionsDocument = "query LuStoryCreationOptions {\n 
 export const LuCreateUniverseDocument = "mutation LuCreateUniverse($input: AuthorUniverseCreateInput!) {\n  result: createAuthorUniverse(input: $input) {\n    id\n    slug\n  }\n}" as const
 export const LuCreateStoryDocument = "mutation LuCreateStory($input: AuthorStoryCreateInput!) {\n  result: createAuthorStory(input: $input) {\n    id\n    slug\n  }\n}" as const
 export const LuProfileDocument = "query LuProfile {\n  result: apiIdentity {\n    userId\n    username\n  }\n}" as const
-export const LuStoriesDocument = "query LuStories($first: Int, $after: String) {\n  result: authorStories(first: $first, after: $after) {\n    nodes {\n      id\n      title\n      slug\n      language\n      universeId\n      organizationId\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n      state\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
+export const LuStoriesDocument = "query LuStories($first: Int, $after: String, $organizationId: ID, $universeId: ID) {\n  result: authorStories(\n    first: $first\n    after: $after\n    organizationId: $organizationId\n    universeId: $universeId\n  ) {\n    nodes {\n      id\n      title\n      slug\n      language\n      universeId\n      organizationId\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n      state\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
 export const LuStoryDocument = "query LuStory($id: ID!) {\n  result: authorStory(id: $id) {\n    id\n    title\n    slug\n    language\n    universeId\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n    description\n    authorsNotes\n    genres\n    tags\n    rating\n    license\n    isAIGenerated\n    aiModel\n    version\n    translations\n  }\n}" as const
-export const LuUniversesDocument = "query LuUniverses($first: Int, $after: String) {\n  result: authorUniverses(first: $first, after: $after) {\n    nodes {\n      id\n      title\n      slug\n      language\n      organizationId\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n      state\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
+export const LuUniversesDocument = "query LuUniverses($first: Int, $after: String, $organizationId: ID) {\n  result: authorUniverses(\n    first: $first\n    after: $after\n    organizationId: $organizationId\n  ) {\n    nodes {\n      id\n      title\n      slug\n      language\n      organizationId\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n      state\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
 export const LuUniverseDocument = "query LuUniverse($id: ID!) {\n  result: authorUniverse(id: $id) {\n    id\n    title\n    slug\n    language\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n    description\n    genre\n    rating\n    license\n    isAIGenerated\n    aiModel\n    version\n    translations {\n      language\n      title\n      description\n      revision\n    }\n  }\n}" as const
 export const LuChaptersDocument = "query LuChapters($storyId: ID!, $language: Locale, $first: Int, $after: String) {\n  result: authorChapters(\n    storyId: $storyId\n    language: $language\n    first: $first\n    after: $after\n  ) {\n    nodes {\n      id\n      storyId\n      sequence\n      title\n      language\n      hasDraft\n      version\n      updatedAt\n      publishedAt\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
 export const LuDraftDocument = "query LuDraft($id: ID!, $language: Locale) {\n  result: authorChapterDraft(id: $id, language: $language) {\n    id\n    storyId\n    sequence\n    title\n    language\n    version\n    updatedAt\n    publishedAt\n    content\n    html\n    text\n    oldHtml\n    markdown\n    authorsNotes\n    translatorsNotes\n    counters\n    aiModel\n  }\n}" as const
@@ -868,7 +873,7 @@ export const LuBlogsDocument = "query LuBlogs {\n  result: authorBlogs {\n    id
 export const LuBlogPostsDocument = "query LuBlogPosts($blogId: ID!, $first: Int, $after: ID) {\n  result: authorBlogPosts(blogId: $blogId, first: $first, after: $after) {\n    id\n    version\n    data\n  }\n}" as const
 export const LuBlogPostDocument = "query LuBlogPost($id: ID!) {\n  result: authorBlogPost(id: $id) {\n    id\n    version\n    data\n  }\n}" as const
 export const LuMutateBlogPostDocument = "mutation LuMutateBlogPost($input: AuthorBlogPostMutationInput!) {\n  result: mutateAuthorBlogPost(input: $input) {\n    id\n    version\n    data\n  }\n}" as const
-export const LuComicsDocument = "query LuComics($first: Int, $after: String) {\n  result: authorComics(first: $first, after: $after) {\n    nodes {\n      id\n      title\n      slug\n      description\n      format\n      language\n      license\n      rating\n      genres\n      tags\n      contentWarnings\n      universeId\n      organizationId\n      relatedStoryIds\n      coverUrl\n      isAIGenerated\n      aiModel\n      chaptersCount\n      pageCountTotal\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
+export const LuComicsDocument = "query LuComics($first: Int, $after: String, $organizationId: ID, $universeId: ID) {\n  result: authorComics(\n    first: $first\n    after: $after\n    organizationId: $organizationId\n    universeId: $universeId\n  ) {\n    nodes {\n      id\n      title\n      slug\n      description\n      format\n      language\n      license\n      rating\n      genres\n      tags\n      contentWarnings\n      universeId\n      organizationId\n      relatedStoryIds\n      coverUrl\n      isAIGenerated\n      aiModel\n      chaptersCount\n      pageCountTotal\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
 export const LuComicDocument = "query LuComic($id: ID!) {\n  result: authorComic(id: $id) {\n    id\n    title\n    slug\n    description\n    format\n    language\n    license\n    rating\n    genres\n    tags\n    contentWarnings\n    universeId\n    organizationId\n    relatedStoryIds\n    coverUrl\n    isAIGenerated\n    aiModel\n    chaptersCount\n    pageCountTotal\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n  }\n}" as const
 export const LuComicChaptersDocument = "query LuComicChapters($comicId: ID!) {\n  result: authorComicChapters(comicId: $comicId) {\n    id\n    comicId\n    sequence\n    title\n    language\n    parentChapterId\n    pageCount\n    isAIGenerated\n    aiModel\n    publishedAt\n    updatedAt\n  }\n}" as const
 export const LuComicPagesDocument = "query LuComicPages($chapterId: ID!) {\n  result: authorComicPages(chapterId: $chapterId) {\n    id\n    chapterId\n    sequence\n    storageMode\n    imageUrl\n    width\n    height\n    altText\n    layers {\n      id\n      pageId\n      kind\n      scope\n      language\n      order\n      items\n      hasImage\n    }\n  }\n}" as const

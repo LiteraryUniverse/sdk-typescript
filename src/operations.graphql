@@ -20,8 +20,8 @@ mutation LuCreateStory($input: AuthorStoryCreateInput!) {
   result: createAuthorStory(input: $input) { id slug }
 }
 query LuProfile { result: apiIdentity { userId username } }
-query LuStories($first: Int, $after: String) {
-  result: authorStories(first: $first, after: $after) {
+query LuStories($first: Int, $after: String, $organizationId: ID, $universeId: ID) {
+  result: authorStories(first: $first, after: $after, organizationId: $organizationId, universeId: $universeId) {
     nodes { id title slug language universeId organizationId createdAt updatedAt publishedAt privateAt state }
     pageInfo { endCursor hasNextPage }
   }
@@ -32,8 +32,8 @@ query LuStory($id: ID!) {
     genres tags rating license isAIGenerated aiModel version translations
   }
 }
-query LuUniverses($first: Int, $after: String) {
-  result: authorUniverses(first: $first, after: $after) {
+query LuUniverses($first: Int, $after: String, $organizationId: ID) {
+  result: authorUniverses(first: $first, after: $after, organizationId: $organizationId) {
     nodes { id title slug language organizationId createdAt updatedAt publishedAt privateAt state }
     pageInfo { endCursor hasNextPage }
   }
@@ -214,8 +214,8 @@ mutation LuMutateBlogPost($input: AuthorBlogPostMutationInput!) {
   result: mutateAuthorBlogPost(input: $input) { id version data }
 }
 
-query LuComics($first: Int, $after: String) {
-  result: authorComics(first: $first, after: $after) {
+query LuComics($first: Int, $after: String, $organizationId: ID, $universeId: ID) {
+  result: authorComics(first: $first, after: $after, organizationId: $organizationId, universeId: $universeId) {
     nodes { id title slug description format language license rating genres tags contentWarnings universeId organizationId relatedStoryIds coverUrl isAIGenerated aiModel chaptersCount pageCountTotal createdAt updatedAt publishedAt privateAt }
     pageInfo { endCursor hasNextPage }
   }

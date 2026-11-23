@@ -42,7 +42,7 @@ export type VaultScope =
 	| { kind: 'universe'; universeId: string }
 	/** One story at the root. */
 	| { kind: 'story'; storyId: string }
-	/** Every story you can write, one folder each under `folder`. */
+	/** Every story you can write that belongs to no organization, one folder each under `folder`. */
 	| { kind: 'workshop'; folder: string }
 export type VaultConfig = {
 	version: 1
@@ -347,7 +347,11 @@ class Sync {
 		if (scope.kind === 'universe') {
 			await this.attempt('Universe', () => this.pullUniverse(scope.universeId))
 			const stories = await all((after) =>
-				this.o.client.stories({ first: 100, after }),
+				this.o.client.stories({
+					first: 100,
+					after,
+					universeId: scope.universeId,
+				}),
 			)
 			for (const story of stories)
 				if (story.universeId === scope.universeId) {
@@ -370,6 +374,22 @@ class Sync {
 			const stories = await all((after) =>
 				this.o.client.stories({ first: 100, after }),
 			)
+			// The listing leaves out organization stories; one already in the folder keeps syncing.
+			// It goes first, so a listed story of the same title cannot take its folder.
+			const pulled = new Set(stories.map((story) => story.id))
+			for (const note of [...this.notes.values()]) {
+				const id = str(
+					note.meta.lu_kind === 'story' ? note.meta.lu_id : note.meta.lu_story,
+				)
+				if (!id || pulled.has(id)) continue
+				pulled.add(id)
+				await this.attempt(note.path, () =>
+					this.pullStory(id, dirname(note.path)).catch((error) => {
+						// Deleted or no longer readable: the notes stay as they are, and an edit still fails on push.
+						if (error?.code !== 'NOT_FOUND') throw error
+					}),
+				)
+			}
 			for (const story of stories)
 				await this.attempt(story.title, () =>
 					this.pullStory(
@@ -705,21 +725,37 @@ class Sync {
 			throw new LiteraryUniverseApiError('NOT_FOUND', 'Story not found')
 		const key = this.key('story', id)
 		const existing = this.notes.get(key)
-		// Two stories can share a title; each gets its own folder.
-		const taken =
-			folder &&
-			([...this.storyDirs.values()].includes(folder) ||
-				[...this.notes.values()].some(
-					(note) =>
-						note.meta.lu_kind === 'story' &&
-						note.meta.lu_id !== id &&
-						dirname(note.path) === folder,
-				))
-		const dir = existing
-			? dirname(existing.path)
-			: taken
-				? `${folder} (${id.slice(0, 6)})`
-				: folder
+		// Two stories can share a title; each gets its own folder. A folder is
+		// another story's while its Story.md or any of its chapter notes is there.
+		// A disk that ignores case sees two such names as one folder.
+		const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+		const owned = (dir: string) =>
+			[...this.storyDirs.values()].some((taken) => same(taken, dir)) ||
+			[...this.notes.values()].some((note) => {
+				const owner = str(
+					note.meta.lu_kind === 'story' ? note.meta.lu_id : note.meta.lu_story,
+				)
+				return owner && owner !== id && same(dirname(note.path), dir)
+			})
+		let dir = existing ? dirname(existing.path) : folder
+		if (!existing && folder && owned(folder)) {
+			// The second story of a title is named by its slug. A slug is unique only
+			// within a universe, so the id names the folder when the slug is taken too.
+			// A story placed before slugs named folders stays where its chapter notes are.
+			const placed = [...this.notes.values()].find(
+				(note) => str(note.meta.lu_story) === id,
+			)
+			const named = [safeName(story.slug ?? '', id.slice(0, 6)), id].map(
+				(name) => `${folder} (${name})`,
+			)
+			const free = named.find((candidate) => !owned(candidate))
+			if (!placed && !free)
+				throw new LiteraryUniverseApiError(
+					'BAD_USER_INPUT',
+					`The folder "${named[0]}" holds another story's notes; move them out`,
+				)
+			dir = placed ? dirname(placed.path) : (free as string)
+		}
 		this.storyDirs.set(id, dir)
 		this.storyLanguages.set(id, story.language)
 		await this.merge(
@@ -1068,7 +1104,7 @@ class Sync {
 
 	async pullComics(universeId: string) {
 		const comics = await all((after) =>
-			this.o.client.comics({ first: 100, after }),
+			this.o.client.comics({ first: 100, after, universeId }),
 		)
 		for (const comic of comics.filter(
 			(item) => item.universeId === universeId,

@@ -47,6 +47,7 @@ function memoryFiles(initial = {}) {
 /** Just enough of Literary Universe for the engine, with every call recorded. */
 function fakeServer() {
 	const calls = []
+	const listed = []
 	const page = (nodes) => ({
 		nodes,
 		pageInfo: { endCursor: null, hasNextPage: false },
@@ -156,11 +157,13 @@ function fakeServer() {
 	const record = (name, input) => calls.push([name, input])
 	const client = {
 		universe: async () => state.universe,
-		stories: async () =>
-			page([
+		stories: async (input) => {
+			listed.push(['stories', input.universeId])
+			return page([
 				{ id: 's1', title: state.story.title, universeId: 'u1' },
 				{ id: 'other', title: 'Elsewhere', universeId: null },
-			]),
+			])
+		},
 		story: async ({ id }) => (id === 's1' ? state.story : null),
 		chapters: async ({ language }) =>
 			page(
@@ -267,8 +270,9 @@ function fakeServer() {
 		series: async () => [
 			{ id: 'r1', title: 'Reading order', storyIds: ['s1'] },
 		],
-		comics: async () =>
-			page([
+		comics: async (input) => {
+			listed.push(['comics', input.universeId])
+			return page([
 				{
 					id: 'k1',
 					title: 'Skyward',
@@ -280,9 +284,10 @@ function fakeServer() {
 					description: 'Up.',
 					aiModel: null,
 				},
-			]),
+			])
+		},
 	}
-	return { client, state, calls }
+	return { client, state, calls, listed }
 }
 
 let server
@@ -335,6 +340,11 @@ test('pulls a universe as notes and changes nothing on a second sync', async () 
 	assert.deepEqual(entry.meta.lu_released, { readers: 1 })
 	assert.match(files.store.get('Series.md'), /1\. \[\[Balance\]\]/)
 	assert.equal(files.store.get('Notes/plan.md'), '# My own notes')
+	// The server filters by universe; listing everything the account can write is slow.
+	assert.deepEqual(server.listed, [
+		['stories', 'u1'],
+		['comics', 'u1'],
+	])
 
 	const second = await sync()
 	assert.deepEqual(
@@ -794,6 +804,85 @@ test('an AI edit after another language was saved is no conflict', async () => {
 	server.calls.length = 0
 	await sync()
 	assert.deepEqual(server.calls, [])
+})
+
+test('workshop scope keeps syncing a story the listing no longer names', async () => {
+	const scope = { kind: 'workshop', folder: 'Workshop' }
+	const listing = (nodes) => async () => ({
+		nodes,
+		pageInfo: { endCursor: null, hasNextPage: false },
+	})
+	server.client.stories = listing([{ id: 's1', title: 'Balance' }])
+	assert.deepEqual((await sync({ scope })).failures, [])
+	// An organization's story drops out of the listing; its notes are still here.
+	server.client.stories = listing([])
+	Object.assign(server.state.chapters[1], {
+		markdown: 'Rewritten.',
+		version: 'v2',
+		updatedAt: 't2',
+	})
+	const report = await sync({ scope })
+	assert.deepEqual(report.failures, [])
+	assert.deepEqual(report.updated, ['Workshop/Balance/02 Two.md'])
+	assert.equal(note('Workshop/Balance/02 Two.md').body, 'Rewritten.')
+	// Chapter notes alone name the story, and the pull brings its Story.md back.
+	files.store.delete('Workshop/Balance/Story.md')
+	assert.deepEqual((await sync({ scope })).created, [
+		'Workshop/Balance/Story.md',
+	])
+	// A newly listed story of the same title gets its own folder, not this one's,
+	// even when the first note found for this story was moved somewhere else.
+	const moved = files.store.get('Workshop/Balance/02 Two.md')
+	const rest = [...files.store].filter(
+		([path]) => !/Story\.md$|02 Two\.md$/.test(path),
+	)
+	files.store.clear()
+	for (const [path, text] of [['Workshop/Elsewhere/02 Two.md', moved], ...rest])
+		files.store.set(path, text)
+	const { story, chapters } = server.client
+	server.client.stories = listing([{ id: 's2', title: 'Balance' }])
+	server.client.story = async ({ id }) => ({
+		...(await story({ id: 's1' })),
+		id,
+		slug: `balance-${id}`,
+	})
+	server.client.chapters = async (input) =>
+		input.storyId === 's1' ? chapters(input) : await listing([])()
+	assert.deepEqual((await sync({ scope })).failures, [])
+	assert.equal(note('Workshop/Elsewhere/Story.md').meta.lu_id, 's1')
+	assert.equal(note('Workshop/Balance (balance-s2)/Story.md').meta.lu_id, 's2')
+	assert.equal(files.store.has('Workshop/Balance/Story.md'), false)
+	// A story whose title folder is another's stays where its chapter notes are.
+	const move = (from, to) => {
+		files.store.set(to, files.store.get(from))
+		files.store.delete(from)
+	}
+	move('Workshop/Balance (balance-s2)/Story.md', 'Workshop/Balance/Story.md')
+	files.store.delete('Workshop/Elsewhere/Story.md')
+	const titled = (...ids) => listing(ids.map((id) => ({ id, title: 'Balance' })))
+	server.client.stories = titled('s1', 's2')
+	const placed = await sync({ scope })
+	assert.deepEqual(placed.failures, [])
+	assert.deepEqual(placed.created, ['Workshop/Elsewhere/Story.md'])
+	// A slug folder that holds another story's notes, in any letter case, is not
+	// shared: the id names the folder, and with that one taken too the pull is refused.
+	move('Workshop/Balance/Story.md', 'Workshop/BALANCE (BALANCE-S3)/Story.md')
+	server.client.stories = titled('s1', 's2', 's3')
+	assert.deepEqual((await sync({ scope })).failures, [])
+	assert.equal(note('Workshop/Balance (s3)/Story.md').meta.lu_id, 's3')
+	move(
+		'Workshop/BALANCE (BALANCE-S3)/Story.md',
+		'Workshop/Balance (balance-s4)/Story.md',
+	)
+	move('Workshop/Balance (s3)/Story.md', 'Workshop/Balance (s4)/Story.md')
+	server.client.stories = titled('s1', 's2', 's3', 's4')
+	const refused = await sync({ scope })
+	assert.equal(refused.failures.length, 1)
+	assert.match(refused.failures[0], /\(balance-s4\)" holds another story's notes/)
+	// A story that was deleted or lost stays a quiet archive.
+	server.client.stories = listing([])
+	server.client.story = async () => null
+	assert.deepEqual((await sync({ scope })).failures, [])
 })
 
 test('story scope pushes only that story and creates originals only', async () => {
