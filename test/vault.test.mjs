@@ -830,7 +830,18 @@ test('workshop scope keeps syncing a story the listing no longer names', async (
 	assert.deepEqual((await sync({ scope })).created, [
 		'Workshop/Balance/Story.md',
 	])
+	// A newly listed story of the same title gets its own folder, not this one's.
+	files.store.delete('Workshop/Balance/Story.md')
+	const { story, chapters } = server.client
+	server.client.stories = listing([{ id: 's2', title: 'Balance' }])
+	server.client.story = async ({ id }) => ({ ...(await story({ id: 's1' })), id })
+	server.client.chapters = async (input) =>
+		input.storyId === 's2' ? (await listing([])()) : chapters(input)
+	assert.deepEqual((await sync({ scope })).failures, [])
+	assert.equal(note('Workshop/Balance/Story.md').meta.lu_id, 's1')
+	assert.equal(note('Workshop/Balance (s2)/Story.md').meta.lu_id, 's2')
 	// A story that was deleted or lost stays a quiet archive.
+	server.client.stories = listing([])
 	server.client.story = async () => null
 	assert.deepEqual((await sync({ scope })).failures, [])
 })

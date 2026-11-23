@@ -75,9 +75,9 @@ try {
 | --- | --- | --- |
 | `identity()` | Any valid credential | API version, deployment label/URL, credential identity, granted scopes/restrictions and limits |
 | `profile()` | `user:read` | Your user ID and optional username |
-| `universes({first, after, organizationId})` | `universe:read` | Paginated author/team universe headers that belong to no organization; `organizationId` lists that organization's universes instead |
+| `universes({first, after, organizationId})` | `universe:read` | Paginated author/team universe headers that belong to no organization; `organizationId` lists that organization's universes instead. An organization key lists its own |
 | `universe({id})` | `universe:read` | Universe metadata and its translations, each with its `revision` |
-| `stories({first, after, organizationId, universeId})` | `story:read` | Paginated author/team story headers that belong to no organization; `organizationId` or `universeId` lists that organization's or universe's stories instead |
+| `stories({first, after, organizationId, universeId})` | `story:read` | Paginated author/team story headers that belong to no organization; `organizationId` or `universeId` lists that organization's or universe's stories instead. An organization key lists its own |
 | `story({id})` | `story:read` | Story metadata and author notes |
 | `chapters({storyId, language, first, after})` | `story:read` | Chapter headers without bodies |
 | `draft({id, language})` | `story:read` | Stored working draft, including JSON, HTML/text/legacy representations and notes/counters |

@@ -374,14 +374,8 @@ class Sync {
 			const stories = await all((after) =>
 				this.o.client.stories({ first: 100, after }),
 			)
-			for (const story of stories)
-				await this.attempt(story.title, () =>
-					this.pullStory(
-						story.id,
-						join(scope.folder, safeName(story.title, story.id)),
-					),
-				)
 			// The listing leaves out organization stories; one already in the folder keeps syncing.
+			// It goes first, so a listed story of the same title cannot take its folder.
 			const pulled = new Set(stories.map((story) => story.id))
 			for (const note of [...this.notes.values()]) {
 				const id = str(
@@ -396,6 +390,13 @@ class Sync {
 					}),
 				)
 			}
+			for (const story of stories)
+				await this.attempt(story.title, () =>
+					this.pullStory(
+						story.id,
+						join(scope.folder, safeName(story.title, story.id)),
+					),
+				)
 		}
 		await this.push()
 		return this.report
