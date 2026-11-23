@@ -727,29 +727,34 @@ class Sync {
 		const existing = this.notes.get(key)
 		// Two stories can share a title; each gets its own folder. A folder is
 		// another story's while its Story.md or any of its chapter notes is there.
+		// A disk that ignores case sees two such names as one folder.
+		const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 		const owned = (dir: string) =>
-			[...this.storyDirs.values()].includes(dir) ||
+			[...this.storyDirs.values()].some((taken) => same(taken, dir)) ||
 			[...this.notes.values()].some((note) => {
 				const owner = str(
 					note.meta.lu_kind === 'story' ? note.meta.lu_id : note.meta.lu_story,
 				)
-				return owner && owner !== id && dirname(note.path) === dir
+				return owner && owner !== id && same(dirname(note.path), dir)
 			})
 		let dir = existing ? dirname(existing.path) : folder
 		if (!existing && folder && owned(folder)) {
-			// The second story of a title is named by its slug, which no other story has.
-			// One placed before slugs named folders stays where its chapter notes are.
+			// The second story of a title is named by its slug. A slug is unique only
+			// within a universe, so the id names the folder when the slug is taken too.
+			// A story placed before slugs named folders stays where its chapter notes are.
 			const placed = [...this.notes.values()].find(
 				(note) => str(note.meta.lu_story) === id,
 			)
-			dir = placed
-				? dirname(placed.path)
-				: `${folder} (${safeName(story.slug ?? '', id.slice(0, 6))})`
-			if (!placed && owned(dir))
+			const named = [safeName(story.slug ?? '', id.slice(0, 6)), id].map(
+				(name) => `${folder} (${name})`,
+			)
+			const free = named.find((candidate) => !owned(candidate))
+			if (!placed && !free)
 				throw new LiteraryUniverseApiError(
 					'BAD_USER_INPUT',
-					`The folder "${dir}" holds another story's notes; move them out`,
+					`The folder "${named[0]}" holds another story's notes; move them out`,
 				)
+			dir = placed ? dirname(placed.path) : (free as string)
 		}
 		this.storyDirs.set(id, dir)
 		this.storyLanguages.set(id, story.language)
