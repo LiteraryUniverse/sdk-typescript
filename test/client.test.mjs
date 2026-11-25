@@ -924,3 +924,57 @@ test('story creation keeps the author choices and does not retry an uncertain wr
 	await assert.rejects(client.createStory(input))
 	assert.equal(calls, 1)
 })
+
+test('reads and changes story and universe notes, sending only the given notes', async () => {
+	const sent = []
+	const story = { concept: 'A **keeper**', pitch: null, version: 'a1' }
+	const universe = { overview: 'Tides', society: null, version: '3' }
+	const results = {
+		LuStoryNotes: { id: 'story', notes: story },
+		LuUpdateStoryNotes: { ...story, pitch: 'Pitch', version: 'b2' },
+		LuUniverseNotes: { id: 'universe', notes: universe },
+		LuUpdateUniverseNotes: { ...universe, society: 'Clans', version: '4' },
+	}
+	const client = new LiteraryUniverseClient({
+		baseUrl: 'https://example.test',
+		token: 'lu_test_fixture',
+		fetch: async (_url, init) => {
+			const request = JSON.parse(init.body)
+			sent.push(request)
+			return Response.json({ data: { result: results[request.operationName] } })
+		},
+	})
+	assert.deepEqual(await client.storyNotes({ id: 'story' }), {
+		id: 'story',
+		notes: story,
+	})
+	const saved = await client.updateStoryNotes({
+		storyId: 'story',
+		input: { pitch: 'Pitch' },
+		expectedVersion: 'a1',
+	})
+	assert.equal(saved.version, 'b2')
+	assert.equal((await client.universeNotes({ id: 'universe' })).notes.version, '3')
+	await client.updateUniverseNotes({
+		universeId: 'universe',
+		input: { society: 'Clans' },
+		expectedVersion: '3',
+	})
+	assert.deepEqual(
+		sent.map((request) => request.operationName),
+		Object.keys(results),
+	)
+	assert.deepEqual(sent[1].variables, {
+		storyId: 'story',
+		input: { pitch: 'Pitch' },
+		expectedVersion: 'a1',
+	})
+	assert.deepEqual(sent[3].variables, {
+		universeId: 'universe',
+		input: { society: 'Clans' },
+		expectedVersion: '3',
+	})
+	// The notes operations name the fields the workshop edits, and no others.
+	assert.match(sent[0].query, /audienceAgeGroup\s+audienceSex/)
+	assert.match(sent[2].query, /keyLocations\s+storyHooks/)
+})

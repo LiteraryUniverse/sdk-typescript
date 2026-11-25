@@ -45,6 +45,28 @@ query LuUniverse($id: ID!) {
     translations { language title description revision }
   }
 }
+query LuStoryNotes($id: ID!) {
+  result: authorStory(id: $id) {
+    id
+    notes { concept settings theme impact outcome audience audienceAgeGroup audienceSex pitch notes version }
+  }
+}
+mutation LuUpdateStoryNotes($storyId: ID!, $input: AuthorStoryNotesInput!, $expectedVersion: String) {
+  result: updateAuthorStoryNotes(storyId: $storyId, input: $input, expectedVersion: $expectedVersion) {
+    concept settings theme impact outcome audience audienceAgeGroup audienceSex pitch notes version
+  }
+}
+query LuUniverseNotes($id: ID!) {
+  result: authorUniverse(id: $id) {
+    id
+    notes { overview foundation society conflicts keyLocations storyHooks notes version }
+  }
+}
+mutation LuUpdateUniverseNotes($universeId: ID!, $input: AuthorUniverseNotesInput!, $expectedVersion: String) {
+  result: updateAuthorUniverseNotes(universeId: $universeId, input: $input, expectedVersion: $expectedVersion) {
+    overview foundation society conflicts keyLocations storyHooks notes version
+  }
+}
 query LuChapters($storyId: ID!, $language: Locale, $first: Int, $after: String) {
   result: authorChapters(storyId: $storyId, language: $language, first: $first, after: $after) {
     nodes { id storyId sequence title language hasDraft version updatedAt publishedAt }
