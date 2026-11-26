@@ -27,6 +27,37 @@ export type AuthorWorkState =
   | 'SCHEDULED'
   | 'PUBLISHED';
 
+/**
+ * Only the given notes change. Markdown replaces a note; an empty text or null
+ * empties it. A note sent back as it was read stays as it is stored.
+ */
+export type AuthorStoryNotesInput = {
+  concept?: string | null | undefined;
+  settings?: string | null | undefined;
+  theme?: string | null | undefined;
+  impact?: string | null | undefined;
+  outcome?: string | null | undefined;
+  audience?: string | null | undefined;
+  audienceAgeGroup?: string | null | undefined;
+  audienceSex?: string | null | undefined;
+  pitch?: string | null | undefined;
+  notes?: string | null | undefined;
+};
+
+/**
+ * Only the given notes change. Markdown replaces a note; an empty text or null
+ * empties it. A note sent back as it was read stays as it is stored.
+ */
+export type AuthorUniverseNotesInput = {
+  overview?: string | null | undefined;
+  foundation?: string | null | undefined;
+  society?: string | null | undefined;
+  conflicts?: string | null | undefined;
+  keyLocations?: string | null | undefined;
+  storyHooks?: string | null | undefined;
+  notes?: string | null | undefined;
+};
+
 export type AuthorUniverseTranslationInput = {
   title?: string | null | undefined;
   description?: string | null | undefined;
@@ -431,6 +462,38 @@ export type LuUniverseQueryVariables = Exact<{
 
 
 export type LuUniverseQuery = { result: { id: string, title: string, slug: string | null, language: string, organizationId: string | null, createdAt: string | null, updatedAt: string | null, publishedAt: string | null, privateAt: string | null, state: AuthorWorkState, description: string | null, genre: string | null, rating: string | null, license: string | null, isAIGenerated: boolean, aiModel: string | null, version: string, translations: Array<{ language: string, title: string, description: string | null, revision: number }> } | null };
+
+export type LuStoryNotesQueryVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type LuStoryNotesQuery = { result: { id: string, notes: { concept: string | null, settings: string | null, theme: string | null, impact: string | null, outcome: string | null, audience: string | null, audienceAgeGroup: string | null, audienceSex: string | null, pitch: string | null, notes: string | null, version: string } | null } | null };
+
+export type LuUpdateStoryNotesMutationVariables = Exact<{
+  storyId: string | number;
+  input: AuthorStoryNotesInput;
+  expectedVersion?: string | null | undefined;
+}>;
+
+
+export type LuUpdateStoryNotesMutation = { result: { concept: string | null, settings: string | null, theme: string | null, impact: string | null, outcome: string | null, audience: string | null, audienceAgeGroup: string | null, audienceSex: string | null, pitch: string | null, notes: string | null, version: string } };
+
+export type LuUniverseNotesQueryVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type LuUniverseNotesQuery = { result: { id: string, notes: { overview: string | null, foundation: string | null, society: string | null, conflicts: string | null, keyLocations: string | null, storyHooks: string | null, notes: string | null, version: string } | null } | null };
+
+export type LuUpdateUniverseNotesMutationVariables = Exact<{
+  universeId: string | number;
+  input: AuthorUniverseNotesInput;
+  expectedVersion?: string | null | undefined;
+}>;
+
+
+export type LuUpdateUniverseNotesMutation = { result: { overview: string | null, foundation: string | null, society: string | null, conflicts: string | null, keyLocations: string | null, storyHooks: string | null, notes: string | null, version: string } };
 
 export type LuChaptersQueryVariables = Exact<{
   storyId: string | number;
@@ -840,6 +903,10 @@ export const LuStoriesDocument = "query LuStories($first: Int, $after: String, $
 export const LuStoryDocument = "query LuStory($id: ID!) {\n  result: authorStory(id: $id) {\n    id\n    title\n    slug\n    language\n    universeId\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n    description\n    authorsNotes\n    genres\n    tags\n    rating\n    license\n    isAIGenerated\n    aiModel\n    version\n    translations\n  }\n}" as const
 export const LuUniversesDocument = "query LuUniverses($first: Int, $after: String, $organizationId: ID) {\n  result: authorUniverses(\n    first: $first\n    after: $after\n    organizationId: $organizationId\n  ) {\n    nodes {\n      id\n      title\n      slug\n      language\n      organizationId\n      createdAt\n      updatedAt\n      publishedAt\n      privateAt\n      state\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
 export const LuUniverseDocument = "query LuUniverse($id: ID!) {\n  result: authorUniverse(id: $id) {\n    id\n    title\n    slug\n    language\n    organizationId\n    createdAt\n    updatedAt\n    publishedAt\n    privateAt\n    state\n    description\n    genre\n    rating\n    license\n    isAIGenerated\n    aiModel\n    version\n    translations {\n      language\n      title\n      description\n      revision\n    }\n  }\n}" as const
+export const LuStoryNotesDocument = "query LuStoryNotes($id: ID!) {\n  result: authorStory(id: $id) {\n    id\n    notes {\n      concept\n      settings\n      theme\n      impact\n      outcome\n      audience\n      audienceAgeGroup\n      audienceSex\n      pitch\n      notes\n      version\n    }\n  }\n}" as const
+export const LuUpdateStoryNotesDocument = "mutation LuUpdateStoryNotes($storyId: ID!, $input: AuthorStoryNotesInput!, $expectedVersion: String) {\n  result: updateAuthorStoryNotes(\n    storyId: $storyId\n    input: $input\n    expectedVersion: $expectedVersion\n  ) {\n    concept\n    settings\n    theme\n    impact\n    outcome\n    audience\n    audienceAgeGroup\n    audienceSex\n    pitch\n    notes\n    version\n  }\n}" as const
+export const LuUniverseNotesDocument = "query LuUniverseNotes($id: ID!) {\n  result: authorUniverse(id: $id) {\n    id\n    notes {\n      overview\n      foundation\n      society\n      conflicts\n      keyLocations\n      storyHooks\n      notes\n      version\n    }\n  }\n}" as const
+export const LuUpdateUniverseNotesDocument = "mutation LuUpdateUniverseNotes($universeId: ID!, $input: AuthorUniverseNotesInput!, $expectedVersion: String) {\n  result: updateAuthorUniverseNotes(\n    universeId: $universeId\n    input: $input\n    expectedVersion: $expectedVersion\n  ) {\n    overview\n    foundation\n    society\n    conflicts\n    keyLocations\n    storyHooks\n    notes\n    version\n  }\n}" as const
 export const LuChaptersDocument = "query LuChapters($storyId: ID!, $language: Locale, $first: Int, $after: String) {\n  result: authorChapters(\n    storyId: $storyId\n    language: $language\n    first: $first\n    after: $after\n  ) {\n    nodes {\n      id\n      storyId\n      sequence\n      title\n      language\n      hasDraft\n      version\n      updatedAt\n      publishedAt\n    }\n    pageInfo {\n      endCursor\n      hasNextPage\n    }\n  }\n}" as const
 export const LuDraftDocument = "query LuDraft($id: ID!, $language: Locale) {\n  result: authorChapterDraft(id: $id, language: $language) {\n    id\n    storyId\n    sequence\n    title\n    language\n    version\n    updatedAt\n    publishedAt\n    content\n    html\n    text\n    oldHtml\n    markdown\n    authorsNotes\n    translatorsNotes\n    counters\n    aiModel\n  }\n}" as const
 export const LuSaveDraftDocument = "mutation LuSaveDraft($input: AuthorDraftSaveInput!) {\n  result: authorSaveChapterDraft(input: $input) {\n    version\n    recoveryId\n    warnings {\n      code\n      path\n      message\n    }\n    draft {\n      id\n      storyId\n      sequence\n      title\n      language\n      version\n      updatedAt\n      publishedAt\n      content\n      html\n      text\n      oldHtml\n      markdown\n      authorsNotes\n      translatorsNotes\n      counters\n      aiModel\n    }\n  }\n}" as const

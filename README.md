@@ -79,6 +79,7 @@ try {
 | `universe({id})` | `universe:read` | Universe metadata and its translations, each with its `revision` |
 | `stories({first, after, organizationId, universeId})` | `story:read` | Paginated author/team story headers that belong to no organization; `organizationId` or `universeId` lists that organization's or universe's stories instead. An organization key lists its own |
 | `story({id})` | `story:read` | Story metadata and author notes |
+| `storyNotes({id})`, `universeNotes({id})` | `story:read`, `universe:read` | The overview notes of a story and the notes of a universe, as Markdown; see [Story overview notes](#story-overview-notes) and [Universe notes](#universe-notes) |
 | `chapters({storyId, language, first, after})` | `story:read` | Chapter headers without bodies |
 | `draft({id, language})` | `story:read` | Stored working draft, including JSON, HTML/text/legacy representations and notes/counters |
 | `encyclopediaEntries({universeId, first, after})` | `universe:read` | Paginated entry headers of a universe, drafts included |
@@ -160,6 +161,17 @@ Organization keys cannot upload covers or chapter images yet; use a personal key
 
 `PRIVATE` hides a published story from readers and its universe's story count; `PUBLIC` shows it again. A story that was never published fails with `BAD_USER_INPUT`.
 
+## Story overview notes
+
+| Method | Scope | Result |
+| --- | --- | --- |
+| `storyNotes({id})` | `story:read` | `{id, notes}`; `notes` is null without edit rights on the story |
+| `updateStoryNotes({storyId, input, expectedVersion?})` | `story:write` | The notes after the change |
+
+These are the notes of the workshop's Overview page, which the AI Assistant reads as the author's intent: `concept`, `settings`, `theme`, `impact`, `outcome`, `audience`, `pitch` and `notes` as Markdown (null when empty), plus `audienceAgeGroup` (`unknown`, `to12`, `12to17`, `18to20`, `21to29`, `30to39`, `40to49`, `50to64`, `65to84` or `above85`) and `audienceSex` (`male` or `female`).
+
+`input` takes the same fields and changes only the ones you give. Markdown replaces a note, and an empty text or `null` empties it. A note sent back exactly as it was read is left as stored, so formatting Markdown cannot carry (alignment, ruby) survives a read and write of the whole set; a note you do change is stored as its Markdown reads. The Markdown is the editor's own: a literal `&`, `<` or `>` reads as `&amp;`, `&lt;` or `&gt;`, and either form is accepted on write. `notes.version` changes with the notes; pass it as `expectedVersion` and notes changed since fail with `VERSION_CONFLICT`. A write that changes nothing succeeds whatever the version, so a repeat after a lost response is safe.
+
 ## Chapter structure
 
 | Method | Scope | Result |
@@ -180,6 +192,15 @@ Renaming and reordering apply to published chapters too, and readers see the cha
 Creation needs a verified account and a personal key without resource restrictions; the universe is owned by you, with the default encyclopedia categories, as the workshop creates it. A taken `slug` fails with `CONFLICT`. Creation is never retried: after a lost response, look for the slug in `universes()` first. Read the choices from `storyCreationOptions()`.
 
 `input` takes `title`, `slug`, `description`, `genre`, `rating`, `license`, `language` and `aiModel` (sets the AI disclosure, as for stories). `universe({id})` returns these details with a `version` for `expectedVersion`. A `slug` is lowercase letters, digits and single hyphens; one in use by another universe fails with `CONFLICT`. `genre` is a genre value such as `fantasy`. A rating under staff review does not change (`FAILED_PRECONDITION`). Translations of the title and description go through `updateUniverseTranslation`.
+
+## Universe notes
+
+| Method | Scope | Result |
+| --- | --- | --- |
+| `universeNotes({id})` | `universe:read` | `{id, notes}`; `notes` is null for a caller who does not read the universe's drafts |
+| `updateUniverseNotes({universeId, input, expectedVersion?})` | `universe:write` | The notes after the change |
+
+The notes of the workshop's Universe notes page: `overview`, `foundation`, `society`, `conflicts`, `keyLocations`, `storyHooks` and `notes`, as Markdown. They follow the rules of story overview notes above. `notes.version` is the revision the workshop saves against, so a save here and one in an open workshop tab cannot overwrite each other: the later one fails with `VERSION_CONFLICT`.
 
 ## Encyclopedia
 

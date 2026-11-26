@@ -154,6 +154,18 @@ type Mutation {
   createAuthorStory(input: AuthorStoryCreateInput!): AuthorStoryCreated!
 
   """
+  Change a story's overview notes. Fails with VERSION_CONFLICT, and changes
+  nothing, when the notes are no longer at expectedVersion.
+  """
+  updateAuthorStoryNotes(storyId: ID!, input: AuthorStoryNotesInput!, expectedVersion: String): AuthorStoryNotes!
+
+  """
+  Change a universe's notes. Fails with VERSION_CONFLICT, and changes nothing,
+  when the notes are no longer at expectedVersion or change during the write.
+  """
+  updateAuthorUniverseNotes(universeId: ID!, input: AuthorUniverseNotesInput!, expectedVersion: String): AuthorUniverseNotes!
+
+  """
   Open a language for a universe. Title and description start as copies of the
   original unless given. Also opens the language for the universe's
   encyclopedia and universe blog.
@@ -373,6 +385,9 @@ type AuthorStory {
   description: String
   authorsNotes: JSON
 
+  """The overview notes as Markdown; null without edit rights on the story."""
+  notes: AuthorStoryNotes
+
   """Genre values, as the genre list names them."""
   genres: [String!]!
   tags: [String!]!
@@ -439,6 +454,88 @@ type AuthorUniverse {
   Translations of the title and description, each with the revision a change must name.
   """
   translations: [AuthorUniverseTranslation!]!
+
+  """
+  The universe notes as Markdown; null for a caller who does not read the universe's drafts.
+  """
+  notes: AuthorUniverseNotes
+}
+
+"""
+A story's overview notes, the author's intent for it. Each text is Markdown,
+null when empty.
+"""
+type AuthorStoryNotes {
+  concept: String
+  settings: String
+  theme: String
+  impact: String
+  outcome: String
+  audience: String
+
+  """
+  unknown, to12, 12to17, 18to20, 21to29, 30to39, 40to49, 50to64, 65to84 or above85.
+  """
+  audienceAgeGroup: String
+
+  """male or female."""
+  audienceSex: String
+  pitch: String
+  notes: String
+
+  """
+  Changes with the notes; pass it as expectedVersion to updateAuthorStoryNotes.
+  """
+  version: String!
+}
+
+"""
+Only the given notes change. Markdown replaces a note; an empty text or null
+empties it. A note sent back as it was read stays as it is stored.
+"""
+input AuthorStoryNotesInput {
+  concept: String
+  settings: String
+  theme: String
+  impact: String
+  outcome: String
+  audience: String
+  audienceAgeGroup: String
+  audienceSex: String
+  pitch: String
+  notes: String
+}
+
+"""
+A universe's notes, the author's intent for the world. Each text is Markdown, null when empty.
+"""
+type AuthorUniverseNotes {
+  overview: String
+  foundation: String
+  society: String
+  conflicts: String
+  keyLocations: String
+  storyHooks: String
+  notes: String
+
+  """
+  Advances with every change; pass it as expectedVersion to updateAuthorUniverseNotes.
+  """
+  version: String!
+}
+
+"""
+Only the given notes change. Markdown replaces a note; an empty text or null
+empties it. A note sent back as it was read stays as it is stored.
+"""
+input AuthorUniverseNotesInput {
+  overview: String
+  foundation: String
+  society: String
+  conflicts: String
+  keyLocations: String
+  storyHooks: String
+  notes: String
 }
 
 type AuthorUniverseTranslation {

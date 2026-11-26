@@ -142,11 +142,17 @@ import {
 	LuStoryDocument,
 	type LuStoryQuery,
 	type LuStoryQueryVariables,
+	LuStoryNotesDocument,
+	type LuStoryNotesQuery,
+	type LuStoryNotesQueryVariables,
 	LuTranslateEncyclopediaEntryDocument,
 	type LuTranslateEncyclopediaEntryMutation,
 	LuUniverseDocument,
 	type LuUniverseQuery,
 	type LuUniverseQueryVariables,
+	LuUniverseNotesDocument,
+	type LuUniverseNotesQuery,
+	type LuUniverseNotesQueryVariables,
 	LuUniversesDocument,
 	type LuUniversesQuery,
 	type LuUniversesQueryVariables,
@@ -168,9 +174,15 @@ import {
 	LuUpdateStoryDocument,
 	type LuUpdateStoryMutation,
 	type LuUpdateStoryMutationVariables,
+	LuUpdateStoryNotesDocument,
+	type LuUpdateStoryNotesMutation,
+	type LuUpdateStoryNotesMutationVariables,
 	LuUpdateUniverseDocument,
 	type LuUpdateUniverseMutation,
 	type LuUpdateUniverseMutationVariables,
+	LuUpdateUniverseNotesDocument,
+	type LuUpdateUniverseNotesMutation,
+	type LuUpdateUniverseNotesMutationVariables,
 	LuUpdateUniverseTranslationDocument,
 	type LuUpdateUniverseTranslationMutation,
 	type LuUpdateUniverseTranslationMutationVariables,
@@ -460,6 +472,51 @@ export class LiteraryUniverseClient {
 		return this.read<LuUpdateStoryMutation>(
 			LuUpdateStoryDocument,
 			'LuUpdateStory',
+			input,
+			options,
+		)
+	}
+	/** A story's overview notes as Markdown; `notes` is null without edit rights on the story. */
+	storyNotes(input: LuStoryNotesQueryVariables, options?: RequestOptions) {
+		return this.read<LuStoryNotesQuery>(
+			LuStoryNotesDocument,
+			'LuStoryNotes',
+			input,
+			options,
+		)
+	}
+	/** Changes the given overview notes; a note sent back as read stays as stored. */
+	updateStoryNotes(
+		input: LuUpdateStoryNotesMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuUpdateStoryNotesMutation>(
+			LuUpdateStoryNotesDocument,
+			'LuUpdateStoryNotes',
+			input,
+			options,
+		)
+	}
+	/** A universe's notes as Markdown; `notes` is null for a caller who does not read its drafts. */
+	universeNotes(
+		input: LuUniverseNotesQueryVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuUniverseNotesQuery>(
+			LuUniverseNotesDocument,
+			'LuUniverseNotes',
+			input,
+			options,
+		)
+	}
+	/** Changes the given universe notes; a note sent back as read stays as stored. */
+	updateUniverseNotes(
+		input: LuUpdateUniverseNotesMutationVariables,
+		options?: RequestOptions,
+	) {
+		return this.read<LuUpdateUniverseNotesMutation>(
+			LuUpdateUniverseNotesDocument,
+			'LuUpdateUniverseNotes',
 			input,
 			options,
 		)
